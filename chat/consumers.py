@@ -16,26 +16,30 @@ class RoomListConsumer(AsyncWebsocketConsumer):
         if self.user == AnonymousUser():
             await self.close()
             return
-
+            
+        # Join user-specific group for personalized updates
         self.user_group = f"user_{self.user.id}"
         await self.channel_layer.group_add(
             self.user_group,
             self.channel_name
         )
-       
+        
+        # Join general room list updates group
         await self.channel_layer.group_add(
             "room_list_updates",
             self.channel_name
         )
         
         await self.accept()
-
+        
+        # Send initial data
         await self.send_room_list_data()
-
+        
+        # Start periodic tasks
         await self.start_periodic_updates()
 
     async def disconnect(self, close_code):
-        
+        # Leave groups
         await self.channel_layer.group_discard(
             self.user_group,
             self.channel_name
@@ -44,7 +48,8 @@ class RoomListConsumer(AsyncWebsocketConsumer):
             "room_list_updates",
             self.channel_name
         )
-     
+        
+        # Update user status to offline
         await self.update_user_status(False)
 
     async def receive(self, text_data):
@@ -60,7 +65,7 @@ class RoomListConsumer(AsyncWebsocketConsumer):
             await self.update_user_activity()
 
     async def send_room_list_data(self):
-      
+        """Send comprehensive room list data"""
         rooms_data = await self.get_user_rooms_data()
         online_users = await self.get_online_users()
         recent_activities = await self.get_recent_activities()
