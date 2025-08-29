@@ -1,6 +1,6 @@
-# chat/models.py
 from django.db import models
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
@@ -8,6 +8,83 @@ from datetime import timedelta
 import uuid
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+
+# Custom QuerySet classes
+class ChatRoomQuerySet(models.QuerySet):
+    def with_unread_counts(self, user):
+        """Get rooms with unread message counts for a user"""
+        return self.prefetch_related('messages', 'members').annotate(
+            unread_count=models.Count(
+                'messages',
+                filter=~models.Q(messages__read_by=user) & ~models.Q(messages__sender=user)
+            )
+        )
+    
+    def with_last_messages(self):
+        """Get rooms with their last messages"""
+        return self.prefetch_related(
+            models.Prefetch(
+                'messages',
+                queryset=Message.objects.select_related('sender').order_by('-created_at')[:1],
+                to_attr='latest_messages'
+            )
+        )
+    
+    def for_user(self, user):
+        """Get rooms that the user is a member of"""
+        return self.filter(members=user, is_active=True)
+
+    def active_rooms(self):
+        """Get only active rooms"""
+        return self.filter(is_active=True)
+
+
+class MessageQuerySet(models.QuerySet):
+    def unread_for_user(self, user):
+        """Get unread messages for a user"""
+        return self.exclude(read_by=user).exclude(sender=user)
+    
+    def in_room_since(self, room, since_time):
+        """Get messages in a room since a specific time"""
+        return self.filter(room=room, created_at__gte=since_time)
+
+    def recent_messages(self, limit=50):
+        """Get recent messages with limit"""
+        return self.order_by('-created_at')[:limit]
+
+
+# Custom managers
+class ChatRoomManager(models.Manager):
+    def get_queryset(self):
+        return ChatRoomQuerySet(self.model, using=self._db)
+    
+    def with_unread_counts(self, user):
+        return self.get_queryset().with_unread_counts(user)
+    
+    def with_last_messages(self):
+        return self.get_queryset().with_last_messages()
+    
+    def for_user(self, user):
+        return self.get_queryset().for_user(user)
+
+    def active_rooms(self):
+        return self.get_queryset().active_rooms()
+
+
+class MessageManager(models.Manager):
+    def get_queryset(self):
+        return MessageQuerySet(self.model, using=self._db)
+    
+    def unread_for_user(self, user):
+        return self.get_queryset().unread_for_user(user)
+    
+    def in_room_since(self, room, since_time):
+        return self.get_queryset().in_room_since(room, since_time)
+
+    def recent_messages(self, limit=50):
+        return self.get_queryset().recent_messages(limit)
+
 
 class ChatRoom(models.Model):
     ROOM_TYPES = (
@@ -37,173 +114,14 @@ class ChatRoom(models.Model):
     last_activity = models.DateTimeField(auto_now=True)
     message_count = models.PositiveIntegerField(default=0)
     
+    # Assign custom manager
+    objects = ChatRoomManager()
+    
     class Meta:
         indexes = [
             models.Index(fields=['last_activity']),
             models.Index(fields=['is_active', 'room_type']), 
         ]
-
-    
-    def __str__(self):
-        return f"{self.user.username} activity"
-    
-    @property
-    def is_recently_active(self):
-        """Check if user was active in the last 10 minutes"""
-        threshold = timezone.now() - timedelta(minutes=10)
-        return self.last_activity >= threshold
-    
-    def set_online_status(self, is_online, current_room=None):
-        """Update online status and current room"""
-        self.is_online = is_online
-        self.last_activity = timezone.now()
-        
-        if current_room:
-            self.current_room = current_room
-        elif not is_online:
-            self.current_room = None
-            self.last_seen = timezone.now()
-        
-        self.save()
-
-
-class ChatEvent(models.Model):
-    """Log important chat events for real-time notifications"""
-    EVENT_TYPES = (
-        ('user_joined', 'User Joined'),
-        ('user_left', 'User Left'),
-        ('message_sent', 'Message Sent'),
-        ('room_created', 'Room Created'),
-        ('room_updated', 'Room Updated'),
-        ('user_promoted', 'User Promoted'),
-        ('user_demoted', 'User Demoted'),
-        ('message_deleted', 'Message Deleted'),
-        ('message_edited', 'Message Edited'),
-    )
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
-    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='events')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    target_user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.CASCADE, 
-        null=True, 
-        blank=True,
-        related_name='targeted_events'
-    )
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, null=True, blank=True)
-    
-    # Event data
-    event_data = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['room', '-created_at']),
-            models.Index(fields=['event_type', '-created_at']),
-        ]
-    
-    def __str__(self):
-        return f"{self.get_event_type_display()} in {self.room.name} by {self.user.username}"
-
-@receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_user_activity_tracker(sender, instance, created, **kwargs):
-    """Create activity tracker for new users"""
-    if created:
-        UserActivity.objects.create(user=instance)
-
-# Custom managers for optimized queries
-class ChatRoomManager(models.Manager):
-    def with_unread_counts(self, user):
-        """Get rooms with unread message counts for a user"""
-        return self.get_queryset().prefetch_related('messages', 'members').annotate(
-            unread_count=models.Count(
-                'messages',
-                filter=~models.Q(messages__read_by=user) & ~models.Q(messages__sender=user)
-            )
-        )
-    
-    def with_last_messages(self):
-        """Get rooms with their last messages"""
-        return self.get_queryset().prefetch_related(
-            models.Prefetch(
-                'messages',
-                queryset=Message.objects.select_related('sender').order_by('-created_at')[:1],
-                to_attr='latest_messages'
-            )
-        )
-    
-    def for_user(self, user):
-        """Get rooms that the user is a member of"""
-        return self.get_queryset().filter(members=user, is_active=True)
-
-
-class MessageManager(models.Manager):
-    def unread_for_user(self, user):
-        """Get unread messages for a user"""
-        return self.get_queryset().exclude(read_by=user).exclude(sender=user)
-    
-    def in_room_since(self, room, since_time):
-        """Get messages in a room since a specific time"""
-        return self.get_queryset().filter(room=room, created_at__gte=since_time)
-
-
-# Update the models to use custom managers
-ChatRoom.objects = ChatRoomManager()
-Message.objects = MessageManager()
-
-# Utility functions for real-time features
-class RealTimeUtils:
-    @staticmethod
-    def get_online_users(threshold_minutes=10):
-        """Get users who have been active within the threshold"""
-        threshold = timezone.now() - timedelta(minutes=threshold_minutes)
-        return settings.AUTH_USER_MODEL.objects.filter(
-            activity_tracker__last_activity__gte=threshold
-        ).select_related('activity_tracker')
-    
-    @staticmethod
-    def get_room_online_count(room, threshold_minutes=10):
-        """Get count of online users in a specific room"""
-        threshold = timezone.now() - timedelta(minutes=threshold_minutes)
-        return room.members.filter(
-            activity_tracker__last_activity__gte=threshold
-        ).count()
-    
-    @staticmethod
-    def get_user_unread_counts(user):
-        """Get unread message counts for all user's rooms"""
-        memberships = RoomMembership.objects.filter(user=user).select_related('room')
-        return {
-            membership.room.id: membership.unread_count 
-            for membership in memberships
-        }
-    
-    @staticmethod
-    def get_recent_activities(limit=10, hours=24):
-        """Get recent chat activities"""
-        threshold = timezone.now() - timedelta(hours=hours)
-        return ChatEvent.objects.filter(
-            created_at__gte=threshold
-        ).select_related('user', 'room', 'message')[:limit]
-    
-    @staticmethod
-    def cleanup_old_data():
-        """Clean up old typing indicators and other temporary data"""
-        # Remove old typing indicators
-        TypingIndicator.cleanup_old_indicators()
-        
-        # Remove old chat events (keep last 30 days)
-        threshold = timezone.now() - timedelta(days=30)
-        ChatEvent.objects.filter(created_at__lt=threshold).delete()
-    
-    @staticmethod
-    def update_user_activity(user, room=None):
-        """Update user's last activity"""
-        activity, created = UserActivity.objects.get_or_create(user=user)
-        activity.set_online_status(True, room)
         ordering = ['-last_activity']
     
     def __str__(self):
@@ -213,7 +131,7 @@ class RealTimeUtils:
     def online_members_count(self):
         """Get count of currently online members"""
         threshold = timezone.now() - timedelta(minutes=10)
-        return self.members.filter(last_activity__gte=threshold).count()
+        return self.members.filter(activity_tracker__last_activity__gte=threshold).count()
     
     @property
     def last_message(self):
@@ -276,6 +194,9 @@ class Message(models.Model):
     # Reactions and engagement
     reaction_count = models.PositiveIntegerField(default=0)
     reply_count = models.PositiveIntegerField(default=0)
+    
+    # Assign custom manager
+    objects = MessageManager()
     
     class Meta:
         ordering = ['-created_at']
@@ -424,3 +345,130 @@ class UserActivity(models.Model):
 
     def __str__(self):
         return f"{self.user} - {'Online' if self.is_online else 'Offline'}"
+    
+    @property
+    def is_recently_active(self):
+        """Check if user was active in the last 10 minutes"""
+        threshold = timezone.now() - timedelta(minutes=10)
+        return self.last_activity >= threshold
+    
+    def set_online_status(self, is_online, current_room=None):
+        """Update online status and current room"""
+        self.is_online = is_online
+        self.last_activity = timezone.now()
+        
+        if current_room:
+            self.current_room = current_room
+        elif not is_online:
+            self.current_room = None
+            self.last_seen = timezone.now()
+        
+        self.save()
+
+
+class ChatEvent(models.Model):
+    """Log important chat events for real-time notifications"""
+    EVENT_TYPES = (
+        ('user_joined', 'User Joined'),
+        ('user_left', 'User Left'),
+        ('message_sent', 'Message Sent'),
+        ('room_created', 'Room Created'),
+        ('room_updated', 'Room Updated'),
+        ('user_promoted', 'User Promoted'),
+        ('user_demoted', 'User Demoted'),
+        ('message_deleted', 'Message Deleted'),
+        ('message_edited', 'Message Edited'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='events')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='targeted_events'
+    )
+    message = models.ForeignKey("Message", on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Event data
+    event_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['room', '-created_at']),
+            models.Index(fields=['event_type', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_event_type_display()} in {self.room.name} by {self.user.username}"
+
+
+@receiver(post_save, sender=None)  # We'll connect this manually
+def create_user_activity_tracker(sender, instance, created, **kwargs):
+    """Create activity tracker for new users"""
+    if created:
+        UserActivity.objects.create(user=instance)
+
+# Connect the signal to the actual User model
+def ready():
+    """Connect signals when Django is ready"""
+    User = get_user_model()
+    post_save.connect(create_user_activity_tracker, sender=User)
+
+
+# Utility functions for real-time features
+class RealTimeUtils:
+    @staticmethod
+    def get_online_users(threshold_minutes=10):
+        """Get users who have been active within the threshold"""
+        User = get_user_model()
+        threshold = timezone.now() - timedelta(minutes=threshold_minutes)
+        return User.objects.filter(
+            activity_tracker__last_activity__gte=threshold
+        ).select_related('activity_tracker')
+    
+    @staticmethod
+    def get_room_online_count(room, threshold_minutes=10):
+        """Get count of online users in a specific room"""
+        threshold = timezone.now() - timedelta(minutes=threshold_minutes)
+        return room.members.filter(
+            activity_tracker__last_activity__gte=threshold
+        ).count()
+    
+    @staticmethod
+    def get_user_unread_counts(user):
+        """Get unread message counts for all user's rooms"""
+        memberships = RoomMembership.objects.filter(user=user).select_related('room')
+        return {
+            membership.room.id: membership.unread_count 
+            for membership in memberships
+        }
+    
+    @staticmethod
+    def get_recent_activities(limit=10, hours=24):
+        """Get recent chat activities"""
+        threshold = timezone.now() - timedelta(hours=hours)
+        return ChatEvent.objects.filter(
+            created_at__gte=threshold
+        ).select_related('user', 'room', 'message')[:limit]
+    
+    @staticmethod
+    def cleanup_old_data():
+        """Clean up old typing indicators and other temporary data"""
+        # Remove old typing indicators
+        TypingIndicator.cleanup_old_indicators()
+        
+        # Remove old chat events (keep last 30 days)
+        threshold = timezone.now() - timedelta(days=30)
+        ChatEvent.objects.filter(created_at__lt=threshold).delete()
+    
+    @staticmethod
+    def update_user_activity(user, room=None):
+        """Update user's last activity"""
+        activity, created = UserActivity.objects.get_or_create(user=user)
+        activity.set_online_status(True, room)
