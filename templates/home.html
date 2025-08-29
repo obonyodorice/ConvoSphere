@@ -1,0 +1,896 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if user.is_authenticated %}
+        Welcome {{ user.first_name|default:user.username }}
+    {% else %}
+        Home
+    {% endif %} - ChatHub
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .personalized-greeting {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        animation: slideInFromTop 0.8s ease-out;
+    }
+    
+    @keyframes slideInFromTop {
+        0% { transform: translateY(-50px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+    }
+    
+    .feature-card {
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(102, 126, 234, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .live-stats {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .live-stats::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        animation: shimmer 3s infinite;
+    }
+    
+    @keyframes shimmer {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    
+    .activity-indicator {
+        width: 10px;
+        height: 10px;
+        background: #10b981;
+        border-radius: 50%;
+        position: relative;
+        animation: pulse 2s infinite;
+    }
+    
+    .activity-indicator::after {
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: #10b981;
+        border-radius: 50%;
+        animation: ping 2s infinite;
+    }
+    
+    @keyframes ping {
+        75%, 100% {
+            transform: scale(2);
+            opacity: 0;
+        }
+    }
+    
+    .category-card {
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+    }
+    
+    .category-card:hover {
+        transform: scale(1.02);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    
+    .notification-toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: rgba(16, 185, 129, 0.9);
+        backdrop-filter: blur(10px);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        transform: translateX(400px);
+        transition: transform 0.3s ease;
+    }
+    
+    .notification-toast.show {
+        transform: translateX(0);
+    }
+    
+    .quick-actions {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .quick-action-btn {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 12px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 20px;
+        transition: all 0.3s ease;
+        transform: scale(0);
+        opacity: 0;
+    }
+    
+    .quick-actions.expanded .quick-action-btn {
+        transform: scale(1);
+        opacity: 1;
+    }
+    
+    .typing-animation {
+        border-right: 2px solid #667eea;
+        animation: typing 4s steps(40) infinite, blink 1s infinite;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    
+    @keyframes typing {
+        0%, 25% { width: 0; }
+        50%, 75% { width: 100%; }
+        100% { width: 0; }
+    }
+    
+    @keyframes blink {
+        50% { border-color: transparent; }
+    }
+    
+    .weather-widget {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 16px;
+        padding: 1rem;
+        animation: slideInFromRight 0.8s ease-out 0.5s both;
+    }
+    
+    @keyframes slideInFromRight {
+        0% { transform: translateX(50px); opacity: 0; }
+        100% { transform: translateX(0); opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Notification Toast -->
+<div id="notificationToast" class="notification-toast">
+    <div class="flex items-center space-x-3">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage"></span>
+    </div>
+</div>
+
+<!-- Hero Section -->
+<section class="hero-section py-20">
+    <div class="max-w-7xl mx-auto px-4 relative z-10">
+        {% if user.is_authenticated %}
+            <!-- Personalized Greeting -->
+            <div class="personalized-greeting text-center mb-8">
+                <div class="flex items-center justify-center space-x-4 mb-4">
+                    <div class="relative">
+                        {% if user.avatar %}
+                            <img src="{{ user.avatar.url }}" alt="{{ user.username }}" 
+                                 class="w-16 h-16 rounded-full border-3 border-white/30">
+                        {% else %}
+                            <img src="https://ui-avatars.com/api/?name={{ user.username }}&background=667eea&color=fff&size=64" 
+                                 alt="{{ user.username }}" class="w-16 h-16 rounded-full border-3 border-white/30">
+                        {% endif %}
+                        {% if user.is_online %}
+                            <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white"></div>
+                        {% endif %}
+                    </div>
+                    <div class="text-left">
+                        <h2 class="text-2xl font-bold text-white">
+                            {% now "H" as current_hour %}
+                            {% if current_hour|add:"0" < 12 %}Good Morning{% elif current_hour|add:"0" < 17 %}Good Afternoon{% else %}Good Evening{% endif %}, 
+                            {{ user.first_name|default:user.username }}!
+                        </h2>
+                        <p class="text-white/80">{{ user.get_role_display }} • Last seen {{ user.last_seen|timesince }} ago</p>
+                    </div>
+                </div>
+                
+                <!-- Quick Stats for User -->
+                <div class="grid grid-cols-3 gap-4 mt-6">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-white">{{ user.posts.count|default:0 }}</div>
+                        <div class="text-white/70 text-sm">Posts</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-white">{{ user.topics.count|default:0 }}</div>
+                        <div class="text-white/70 text-sm">Topics</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-white">{{ user.events_attending.count|default:0 }}</div>
+                        <div class="text-white/70 text-sm">Events</div>
+                    </div>
+                </div>
+                
+                <!-- Weather Widget -->
+                <div class="weather-widget mt-6 inline-block">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-sun text-yellow-400 text-xl"></i>
+                        <div>
+                            <div class="text-white font-medium">Nairobi, Kenya</div>
+                            <div class="text-white/70 text-sm">23°C • Sunny</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        
+        <div class="text-center space-y-8">
+            <h1 class="text-5xl md:text-7xl font-bold text-white leading-tight">
+                {% if user.is_authenticated %}
+                    Ready to
+                    <span class="block typing-animation" data-texts="Connect,Collaborate,Create,Innovate">Connect</span>
+                {% else %}
+                    Welcome to
+                    <span class="block typing-animation" data-texts="ChatHub,Community,Connection">ChatHub</span>
+                {% endif %}
+            </h1>
+            
+            <p class="text-xl md:text-2xl text-white/80 max-w-3xl mx-auto leading-relaxed">
+                {% if user.is_authenticated %}
+                    Jump back into conversations, check out new events, or start something amazing with our community.
+                {% else %}
+                    Connect, collaborate, and create amazing experiences with our modern community platform featuring real-time chat, engaging forums, and exciting events.
+                {% endif %}
+            </p>
+            
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
+                {% if not user.is_authenticated %}
+                    <a href="{% url 'accounts:login' %}" class="px-8 py-4 bg-white text-gray-900 font-semibold rounded-xl hover-glow transition-all duration-300 text-lg">
+                        <i class="fas fa-rocket mr-2"></i>Get Started
+                    </a>
+                    <a href="#features" class="px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 transition-all duration-300 text-lg">
+                        <i class="fas fa-eye mr-2"></i>Explore Features
+                    </a>
+                {% else %}
+                    <a href="{% url 'forums:home' %}" class="px-8 py-4 bg-white text-gray-900 font-semibold rounded-xl hover-glow transition-all duration-300 text-lg">
+                        <i class="fas fa-comments mr-2"></i>Browse Forums
+                    </a>
+                    <a href="{% url 'chat:room_list' %}" class="px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 transition-all duration-300 text-lg">
+                        <i class="fas fa-comment-dots mr-2"></i>Join Chat
+                    </a>
+                    <a href="{% url 'events:list' %}" class="px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover-glow transition-all duration-300 text-lg">
+                        <i class="fas fa-calendar mr-2"></i>View Events
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Live Stats Section -->
+<section class="py-16 bg-gray-1000">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold text-white mb-4">
+                <span class="flex items-center justify-center space-x-2">
+                    <div class="activity-indicator"></div>
+                    <span>Live Community Stats</span>
+                </span>
+            </h2>
+            <p class="text-white/70">Real-time updates from our growing community</p>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            <div class="live-stats bg-white/5 backdrop-blur-sm p-6 rounded-2xl">
+                <div class="text-3xl font-bold text-white mb-2" data-target="{{ total_users|default:0 }}">0</div>
+                <p class="text-white/60 font-medium">Active Members</p>
+                <div class="text-xs text-green-400 mt-1">
+                    <i class="fas fa-arrow-up mr-1"></i>+{{ new_users_today|default:0 }} today
+                </div>
+            </div>
+            <div class="live-stats bg-white/5 backdrop-blur-sm p-6 rounded-2xl">
+                <div class="text-3xl font-bold text-white mb-2" data-target="{{ total_topics|default:0 }}">0</div>
+                <p class="text-white/60 font-medium">Forum Topics</p>
+                <div class="text-xs text-blue-400 mt-1">
+                    <i class="fas fa-fire mr-1"></i>{{ hot_topics|default:0 }} trending
+                </div>
+            </div>
+            <div class="live-stats bg-white/5 backdrop-blur-sm p-6 rounded-2xl">
+                <div class="text-3xl font-bold text-white mb-2" data-target="{{ total_messages|default:0 }}">0</div>
+                <p class="text-white/60 font-medium">Messages Today</p>
+                <div class="text-xs text-purple-400 mt-1">
+                    <i class="fas fa-clock mr-1"></i>{{ online_users|default:0 }} online now
+                </div>
+            </div>
+            <div class="live-stats bg-white/5 backdrop-blur-sm p-6 rounded-2xl">
+                <div class="text-3xl font-bold text-white mb-2" data-target="{{ upcoming_events|default:0 }}">0</div>
+                <p class="text-white/60 font-medium">Upcoming Events</p>
+                <div class="text-xs text-yellow-400 mt-1">
+                    <i class="fas fa-calendar mr-1"></i>Next in {{ next_event_time|default:"0 hours" }}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Dynamic Categories Section -->
+<section class="py-20 bg-gray-700">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="text-center mb-16">
+            <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">
+                Explore <span class="gradient-text">Forum Categories</span>
+            </h2>
+            <p class="text-xl text-white/70 max-w-2xl mx-auto">
+                Join discussions in your areas of interest and connect with like-minded community members
+            </p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for category in categories %}
+            <a href="{% url 'forums:category_detail' category.slug %}" class="category-card block">
+                <div class="bg-white/5 p-6 rounded-2xl border border-white/10 h-full">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-white">{{ category.name }}</h3>
+                        <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                            <i class="fas {{ category.icon|default:'fa-folder' }} text-white"></i>
+                        </div>
+                    </div>
+                    <p class="text-white/60 mb-4">{{ category.description|default:"Join the discussion in this category" }}</p>
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center space-x-4">
+                            <span class="text-white/50">{{ category.topics.count }} topics</span>
+                            <span class="text-white/50">{{ category.get_total_posts }} posts</span>
+                        </div>
+                        {% if category.latest_post %}
+                            <div class="text-xs text-white/40">
+                                {{ category.latest_post.created_at|timesince }} ago
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="flex -space-x-2 mt-4">
+                        {% for user in category.active_users|slice:":3" %}
+                            <div class="w-6 h-6 rounded-full border-2 border-gray-800 overflow-hidden">
+                                {% if user.avatar %}
+                                    <img src="{{ user.avatar.url }}" alt="{{ user.username }}" class="w-full h-full object-cover">
+                                {% else %}
+                                    <img src="https://ui-avatars.com/api/?name={{ user.username }}&background=random&size=24" alt="{{ user.username }}" class="w-full h-full object-cover">
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        {% if category.active_users.count > 3 %}
+                            <div class="w-6 h-6 bg-white/20 rounded-full border-2 border-gray-800 flex items-center justify-center">
+                                <span class="text-xs text-white">+{{ category.active_users.count|add:"-3" }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+            {% empty %}
+            <!-- Default categories when none exist -->
+            <div class="category-card bg-white/5 p-6 rounded-2xl border border-white/10">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold text-white">Technology</h3>
+                    <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                        <i class="fas fa-laptop-code text-white"></i>
+                    </div>
+                </div>
+                <p class="text-white/60 mb-4">Discuss the latest in tech, programming, and digital innovation</p>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-white/50">124 topics</span>
+                    <div class="activity-indicator"></div>
+                </div>
+            </div>
+            
+            <div class="category-card bg-white/5 p-6 rounded-2xl border border-white/10">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold text-white">General Discussion</h3>
+                    <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center">
+                        <i class="fas fa-comments text-white"></i>
+                    </div>
+                </div>
+                <p class="text-white/60 mb-4">Open conversations about anything and everything</p>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-white/50">89 topics</span>
+                    <div class="activity-indicator"></div>
+                </div>
+            </div>
+            
+            <div class="category-card bg-white/5 p-6 rounded-2xl border border-white/10">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold text-white">Events & Meetups</h3>
+                    <div class="w-12 h-12 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full flex items-center justify-center">
+                        <i class="fas fa-calendar-alt text-white"></i>
+                    </div>
+                </div>
+                <p class="text-white/60 mb-4">Plan and discuss upcoming community events</p>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-white/50">34 topics</span>
+                    <div class="activity-indicator"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="text-center mt-12">
+            <a href="{% url 'forums:home' %}" class="px-8 py-4 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-xl hover-glow transition-all duration-300">
+                <i class="fas fa-th-large mr-2"></i>View All Categories
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Recent Activity Section -->
+<section class="py-20 bg-gray-1000">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="text-center mb-16">
+            <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">
+                Recent <span class="gradient-text">Activity</span>
+            </h2>
+            <p class="text-xl text-white/70">
+                Stay updated with the latest conversations and events
+            </p>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <!-- Recent Discussions -->
+            <div class="space-y-6">
+                <div class="flex items-center space-x-3 mb-8">
+                    <div class="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+                        <i class="fas fa-fire text-white text-sm"></i>
+                    </div>
+                    <h3 class="text-2xl font-semibold text-white">Hot Discussions</h3>
+                    <div class="activity-indicator"></div>
+                </div>
+                
+                {% for post in recent_posts|slice:":3" %}
+                <div class="activity-card bg-white/5 p-6 rounded-xl border border-white/10 hover:bg-white/10 transition-all duration-200 cursor-pointer">
+                    <div class="flex items-start space-x-4">
+                        <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                            {% if post.author.avatar %}
+                                <img src="{{ post.author.avatar.url }}" alt="{{ post.author.username }}" class="w-full h-full object-cover">
+                            {% else %}
+                                <img src="https://ui-avatars.com/api/?name={{ post.author.username }}&background=random&size=40" alt="{{ post.author.username }}" class="w-full h-full object-cover">
+                            {% endif %}
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-white font-medium mb-1">{{ post.title|truncatechars:50 }}</h4>
+                            <p class="text-white/60 text-sm mb-2">{{ post.content|truncatechars:100 }}</p>
+                            <div class="flex items-center space-x-4 text-xs text-white/50">
+                                <span><i class="fas fa-user mr-1"></i>{{ post.author.username }}</span>
+                                <span><i class="fas fa-comments mr-1"></i>{{ post.replies.count }} replies</span>
+                                <span><i class="fas fa-clock mr-1"></i>{{ post.created_at|timesince }} ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <!-- Default content when no posts -->
+                <div class="activity-card bg-white/5 p-9 rounded-xl border border-white/10">
+                    <div class="text-center text-white/60">
+                        <i class="fas fa-comments text-4xl mb-4"></i>
+                        <p>No recent discussions yet. Be the first to start a conversation!</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Upcoming Events -->
+            <div class="space-y-6">
+                <div class="flex items-center space-x-3 mb-8">
+                    <div class="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+                        <i class="fas fa-calendar-check text-white text-sm"></i>
+                    </div>
+                    <h3 class="text-2xl font-semibold text-white">Upcoming Events</h3>
+                </div>
+                
+                {% for event in upcoming_events_list|slice:":3" %}
+                <div class="activity-card bg-white/5 p-6 rounded-xl border border-white/10 hover:bg-white/10 transition-all duration-200 cursor-pointer">
+                    <div class="flex items-center space-x-4 mb-4">
+                        <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                            <i class="fas {{ event.icon|default:'fa-calendar' }} text-white"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-white font-semibold">{{ event.title }}</h4>
+                            <p class="text-white/60 text-sm">{{ event.event_type|capfirst }} • {{ event.start_date|date:"M d, Y" }} at {{ event.start_time|time:"g:i A" }}</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-green-400 text-sm font-medium">{{ event.attendees.count }} attending</div>
+                            <div class="text-white/50 text-xs">{{ event.start_date|timeuntil }}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <div class="flex -space-x-1">
+                            {% for attendee in event.attendees.all|slice:":3" %}
+                                <div class="w-6 h-6 rounded-full border-2 border-gray-800 overflow-hidden">
+                                    {% if attendee.avatar %}
+                                        <img src="{{ attendee.avatar.url }}" alt="{{ attendee.username }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <img src="https://ui-avatars.com/api/?name={{ attendee.username }}&background=random&size=24" alt="{{ attendee.username }}" class="w-full h-full object-cover">
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            {% if event.attendees.count > 3 %}
+                                <div class="w-6 h-6 bg-white/20 rounded-full border-2 border-gray-800 flex items-center justify-center">
+                                    <span class="text-xs text-white">+{{ event.attendees.count|add:"-3" }}</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <span class="text-white/50 text-sm">{{ event.location|default:"Online Event" }}</span>
+                    </div>
+                </div>
+                {% empty %}
+                <!-- Default content when no events -->
+                <div class="activity-card bg-white/5 p-6 rounded-xl border border-white/10">
+                    <div class="text-center text-white/60">
+                        <i class="fas fa-calendar text-4xl mb-4"></i>
+                        <p>No upcoming events scheduled. Check back soon for exciting community gatherings!</p>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div class="text-center mt-8">
+                    <a href="{% url 'events:list' %}" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">
+                        View All Events <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Call to Action -->
+{% if not user.is_authenticated %}
+<section class="py-20 bg-gradient-to-r from-purple-600 to-blue-600">
+    <div class="max-w-4xl mx-auto text-center px-4">
+        <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">
+            Ready to Join Our Community?
+        </h2>
+        <p class="text-xl text-white/80 mb-12 leading-relaxed">
+            Connect with thousands of like-minded individuals, participate in engaging discussions, 
+            attend exciting events, and be part of something amazing.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a href="{% url 'accounts:login' %}" class="px-10 py-4 bg-white text-gray-900 font-bold rounded-xl hover-glow transition-all duration-300 text-lg">
+                <i class="fas fa-rocket mr-2"></i>Join ChatHub Today
+            </a>
+            <a href="#features" class="px-10 py-4 border-2 border-white/30 text-white font-bold rounded-xl hover:bg-white/10 transition-all duration-300 text-lg">
+                <i class="fas fa-info-circle mr-2"></i>Learn More
+            </a>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- Quick Actions (Floating) -->
+{% if user.is_authenticated %}
+<div class="quick-actions" id="quickActions">
+    <div class="quick-action-btn bg-green-500 hover:bg-green-600" style="animation-delay: 0.1s;" title="New Post">
+        <i class="fas fa-plus"></i>
+    </div>
+    <div class="quick-action-btn bg-blue-500 hover:bg-blue-600" style="animation-delay: 0.2s;" title="Messages">
+        <i class="fas fa-envelope"></i>
+    </div>
+    <div class="quick-action-btn bg-purple-500 hover:bg-purple-600" style="animation-delay: 0.3s;" title="Events">
+        <i class="fas fa-calendar"></i>
+    </div>
+    <button class="quick-action-btn bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600" 
+            id="quickActionsToggle" style="transform: scale(1); opacity: 1;">
+        <i class="fas fa-bolt" id="toggleIcon"></i>
+    </button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dynamic typing animation
+    class TypingAnimation {
+        constructor(element) {
+            this.element = element;
+            this.texts = element.dataset.texts ? element.dataset.texts.split(',') : ['ChatHub'];
+            this.currentIndex = 0;
+            this.currentText = '';
+            this.isDeleting = false;
+            this.typeSpeed = 150;
+            this.deleteSpeed = 100;
+            this.pauseTime = 2000;
+            
+            this.type();
+        }
+        
+        type() {
+            const fullText = this.texts[this.currentIndex];
+            
+            if (this.isDeleting) {
+                this.currentText = fullText.substring(0, this.currentText.length - 1);
+            } else {
+                this.currentText = fullText.substring(0, this.currentText.length + 1);
+            }
+            
+            this.element.textContent = this.currentText;
+            
+            let typeSpeed = this.isDeleting ? this.deleteSpeed : this.typeSpeed;
+            
+            if (!this.isDeleting && this.currentText === fullText) {
+                typeSpeed = this.pauseTime;
+                this.isDeleting = true;
+            } else if (this.isDeleting && this.currentText === '') {
+                this.isDeleting = false;
+                this.currentIndex = (this.currentIndex + 1) % this.texts.length;
+                typeSpeed = 500;
+            }
+            
+            setTimeout(() => this.type(), typeSpeed);
+        }
+    }
+    
+    // Initialize typing animation
+    document.addEventListener('DOMContentLoaded', function() {
+        const typingElement = document.querySelector('.typing-animation');
+        if (typingElement) {
+            new TypingAnimation(typingElement);
+        }
+        
+        // Animated counters for stats
+        function animateCounters() {
+            const counters = document.querySelectorAll('[data-target]');
+            
+            counters.forEach(counter => {
+                const target = parseInt(counter.getAttribute('data-target'));
+                const increment = target / 100;
+                let current = 0;
+                
+                const timer = setInterval(() => {
+                    current += increment;
+                    if (current >= target) {
+                        current = target;
+                        clearInterval(timer);
+                    }
+                    
+                    // Format number with K suffix if needed
+                    if (target >= 1000) {
+                        counter.textContent = (current / 1000).toFixed(1) + 'K';
+                    } else {
+                        counter.textContent = Math.floor(current).toLocaleString();
+                    }
+                }, 50);
+            });
+        }
+        
+        // Trigger counter animation when stats section is visible
+        const observerOptions = {
+            threshold: 0.5,
+            rootMargin: '0px 0px -100px 0px'
+        };
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !entry.target.dataset.animated) {
+                    entry.target.dataset.animated = 'true';
+                    animateCounters();
+                }
+            });
+        }, observerOptions);
+        
+        const statsSection = document.querySelector('.live-stats');
+        if (statsSection) {
+            observer.observe(statsSection);
+        }
+        
+        // Quick actions functionality
+        const quickActions = document.getElementById('quickActions');
+        const toggleBtn = document.getElementById('quickActionsToggle');
+        const toggleIcon = document.getElementById('toggleIcon');
+        
+        if (quickActions && toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                quickActions.classList.toggle('expanded');
+                
+                if (quickActions.classList.contains('expanded')) {
+                    toggleIcon.className = 'fas fa-times';
+                } else {
+                    toggleIcon.className = 'fas fa-bolt';
+                }
+            });
+            
+            // Add click handlers for quick action buttons
+            const actionButtons = quickActions.querySelectorAll('.quick-action-btn:not(#quickActionsToggle)');
+            actionButtons.forEach((btn, index) => {
+                btn.addEventListener('click', function() {
+                    const title = this.title;
+                    showNotificationToast(`Quick action: ${title} clicked!`);
+                    
+                    // Handle specific actions
+                    switch(title) {
+                        case 'New Post':
+                            {% if category and topic %}
+                                window.location.href = "{% url 'forums:create_post' category.slug topic.slug %}";
+                            {% else %}
+                                alert("Please open a category/topic before creating a post.");
+                            {% endif %}
+
+                            break;
+                        case 'Messages':
+                            window.location.href = "{% url 'chat:room_list' %}";
+                            break;
+                        case 'Events':
+                            window.location.href = "{% url 'events:list' %}";
+                            break;
+                    }
+                });
+            });
+        }
+        
+        // Notification toast function
+        window.showNotificationToast = function(message, type = 'success') {
+            const toast = document.getElementById('notificationToast');
+            const messageSpan = document.getElementById('toastMessage');
+            
+            if (toast && messageSpan) {
+                messageSpan.textContent = message;
+                
+                // Update toast styling based on type
+                toast.className = 'notification-toast show';
+                if (type === 'error') {
+                    toast.style.background = 'rgba(239, 68, 68, 0.9)';
+                } else if (type === 'warning') {
+                    toast.style.background = 'rgba(245, 158, 11, 0.9)';
+                } else {
+                    toast.style.background = 'rgba(16, 185, 129, 0.9)';
+                }
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        };
+        
+        // Activity cards interactions
+        const activityCards = document.querySelectorAll('.activity-card');
+        activityCards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Add ripple effect
+                const ripple = document.createElement('div');
+                ripple.className = 'absolute inset-0 bg-white/10 rounded-xl opacity-0';
+                ripple.style.animation = 'ping 0.5s ease-out';
+                
+                this.style.position = 'relative';
+                this.appendChild(ripple);
+                
+                setTimeout(() => ripple.remove(), 500);
+            });
+        });
+        
+        // Category card hover effects
+        const categoryCards = document.querySelectorAll('.category-card');
+        categoryCards.forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(1.02) translateY(-4px)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1) translateY(0)';
+            });
+        });
+        
+        // Real-time updates simulation
+        function simulateRealTimeUpdates() {
+            const onlineCounter = document.querySelector('[data-target="{{ online_users|default:45 }}"]');
+            if (onlineCounter) {
+                setInterval(() => {
+                    const current = parseInt(onlineCounter.textContent);
+                    const change = Math.floor(Math.random() * 5) - 2; // -2 to +2 change
+                    const newValue = Math.max(1, current + change);
+                    onlineCounter.textContent = newValue;
+                }, 10000); // Update every 10 seconds
+            }
+        }
+        
+        // Initialize real-time updates
+        simulateRealTimeUpdates();
+        
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Progressive loading of images
+        const imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    img.style.opacity = '0';
+                    img.style.transition = 'opacity 0.3s';
+                    
+                    img.onload = () => {
+                        img.style.opacity = '1';
+                    };
+                    
+                    imageObserver.unobserve(img);
+                }
+            });
+        });
+        
+        document.querySelectorAll('img').forEach(img => {
+            imageObserver.observe(img);
+        });
+        
+        // Weather widget click functionality
+        const weatherWidget = document.querySelector('.weather-widget');
+        if (weatherWidget) {
+            weatherWidget.addEventListener('click', function() {
+                showNotificationToast('Weather details would open here!', 'info');
+            });
+            
+            weatherWidget.style.cursor = 'pointer';
+        }
+        
+        // Auto-hide quick actions on scroll
+        let lastScrollY = window.scrollY;
+        window.addEventListener('scroll', () => {
+            const quickActions = document.getElementById('quickActions');
+            if (quickActions) {
+                if (window.scrollY > lastScrollY && window.scrollY > 200) {
+                    quickActions.style.transform = 'translateY(100px)';
+                } else {
+                    quickActions.style.transform = 'translateY(0)';
+                }
+                lastScrollY = window.scrollY;
+            }
+        });
+    });
+    
+    // Service Worker for offline functionality (if needed)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                console.log('ServiceWorker registration successful');
+            }, function(err) {
+                console.log('ServiceWorker registration failed');
+            });
+        });
+    }
+</script>
+{% endblock %}

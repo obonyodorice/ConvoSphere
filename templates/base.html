@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#667eea">
+    <title>{% block title %}ChatHub - Modern Community Platform{% endblock %}</title>
+    
+    <!-- Preload Critical Resources -->
+    <link rel="preload" href="{% static 'css/styles.css' %}" as="style">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" as="style">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Scroll Progress Indicator -->
+    <div class="scroll-indicator" id="scrollIndicator"></div>
+    
+    <!-- Performance Monitor (Dev Only) -->
+    <div id="performanceMonitor" class="fixed top-4 left-4 z-50 bg-black/50 text-white p-2 rounded text-xs font-mono opacity-0 transition-opacity" style="display: none;">
+        <div>FPS: <span id="fpsCounter">60</span></div>
+        <div>Memory: <span id="memoryUsage">0MB</span></div>
+    </div>
+    
+    <!-- Navigation -->
+    <nav class="glass-effect sticky top-0 z-50 border-b border-white/10" id="mainNav">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-4">
+                    <button class="lg:hidden text-white hover:text-purple-300 transition-colors" id="mobileMenuBtn">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <a href="{% url 'forums:home' %}" class="flex items-center space-x-3 group">
+                        <div class="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 group-hover:rotate-12">
+                            <i class="fas fa-comments text-white text-lg"></i>
+                        </div>
+                        <span class="font-bold text-xl gradient-text">ChatHub</span>
+                    </a>
+                </div>
+                
+                <!-- Desktop Navigation -->
+                <div class="hidden lg:flex items-center space-x-1">
+                    <a href="{% url 'forums:home' %}" class="nav-item px-4 py-2 rounded-lg text-white/80 hover:text-white transition-all duration-300" data-page="forums">
+                        <i class="fas fa-home mr-2"></i>Forums
+                        <span class="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full opacity-0 transition-opacity activity-indicator" data-activity="forums"></span>
+                    </a>
+                    <a href="{% url 'events:list' %}" class="nav-item px-4 py-2 rounded-lg text-white/80 hover:text-white transition-all duration-300" data-page="events">
+                        <i class="fas fa-calendar-alt mr-2"></i>Events
+                        <span class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full opacity-0 transition-opacity activity-indicator" data-activity="events"></span>
+                    </a>
+                    <a href="{% url 'chat:room_list' %}" class="nav-item px-4 py-2 rounded-lg text-white/80 hover:text-white transition-all duration-300" data-page="chat">
+                        <i class="fas fa-comment-dots mr-2"></i>Chat
+                        <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full opacity-0 transition-opacity activity-indicator" data-activity="chat"></span>
+                    </a>
+                </div>
+                
+                <!-- Search Bar (Hidden on Mobile) -->
+                <div class="hidden md:flex items-center">
+                    <div class="relative">
+                        <input type="text" placeholder="Search..." 
+                               class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 pl-10 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 w-64" 
+                               id="searchInput">
+                        <i class="fas fa-search absolute left-3 top-3 text-white/60"></i>
+                        
+                        <!-- Search Results Dropdown -->
+                        <div class="absolute top-full mt-2 w-full glass-effect rounded-xl hidden" id="searchResults">
+                            <div class="p-4">
+                                <div class="text-sm text-white/60 mb-2">Recent Searches</div>
+                                <div class="space-y-2" id="searchResultsList"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    {% if user.is_authenticated %}
+                        <!-- Theme Toggle -->
+                        <button class="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200" id="themeToggle" title="Toggle Theme">
+                            <i class="fas fa-moon text-lg" id="themeIcon"></i>
+                        </button>
+                        
+                        <!-- Notifications -->
+                        <div class="relative">
+                            <button class="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200" id="notificationBtn">
+                                <i class="fas fa-bell text-lg"></i>
+                                <span class="notification-badge absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center" id="notificationCount">3</span>
+                            </button>
+                            
+                            <!-- Enhanced Notification Dropdown -->
+                            <div class="absolute right-0 mt-2 w-80 glass-effect rounded-xl shadow-lg hidden" id="notificationDropdown">
+                                <div class="p-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="font-semibold">Notifications</h3>
+                                        <button class="text-xs text-purple-400 hover:text-purple-300" id="markAllRead">Mark all read</button>
+                                    </div>
+                                    <div class="space-y-3 max-h-64 overflow-y-auto" id="notificationsList">
+                                        <!-- Dynamic notifications will be loaded here -->
+                                        <div class="notification-item flex items-start space-x-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-all duration-200">
+                                            <div class="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                                            <div class="flex-1">
+                                                <p class="text-sm">New message in Tech Discussion</p>
+                                                <p class="text-xs text-white/60 mt-1">2 minutes ago</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <a href="{% url 'notifications:list' %}" class="block text-center text-sm text-purple-400 hover:text-purple-300 mt-3">View all</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- User Profile -->
+                        <div class="relative">
+                            <button class="flex items-center space-x-2 p-1 rounded-lg hover:bg-white/10 transition-all duration-200" id="userMenuBtn">
+                                <div class="relative profile-sync" data-user-id="{{ user.id }}" data-status="{% if user.is_online %}online{% else %}offline{% endif %}">
+                                    {% if user.avatar %}
+                                        <img src="{{ user.avatar.url }}" alt="{{ user.username }}" class="w-8 h-8 rounded-full">
+                                    {% else %}
+                                        <img src="https://ui-avatars.com/api/?name={{ user.username }}&background=667eea&color=fff&size=32" alt="{{ user.username }}" class="w-8 h-8 rounded-full">
+                                    {% endif %}
+                                    <div class="absolute -bottom-0.5 -right-0.5 status-indicator {% if user.is_online %}status-online{% else %}status-offline{% endif %}"></div>
+                                </div>
+                                <span class="hidden md:block text-sm font-medium">{{ user.username }}</span>
+                                <i class="fas fa-chevron-down text-xs text-white/60 transform transition-transform duration-200" id="userMenuChevron"></i>
+                            </button>
+                            
+                            <!-- Enhanced User Dropdown -->
+                            <div class="absolute right-0 mt-2 w-56 glass-effect rounded-xl shadow-lg hidden dropdown" id="userDropdown">
+                                <div class="p-2">
+                                    <!-- Profile Header -->
+                                    <div class="px-3 py-2 border-b border-white/10 mb-2">
+                                        <div class="font-medium text-white">{{ user.get_full_name|default:user.username }}</div>
+                                        <div class="text-xs text-white/60">{{ user.email }}</div>
+                                    </div>
+                                    
+                                    <!-- Menu Items -->
+                                    <a href="{% url 'accounts:profile' user.id %}" class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200">
+                                        <i class="fas fa-user text-purple-400"></i>
+                                        <span>Profile</span>
+                                    </a>
+                                    <a href="#" class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200">
+                                        <i class="fas fa-cog text-purple-400"></i>
+                                        <span>Settings</span>
+                                    </a>
+                                    <a href="#" class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200">
+                                        <i class="fas fa-moon text-purple-400"></i>
+                                        <span>Dark Mode</span>
+                                    </a>
+                                    <hr class="my-2 border-white/10">
+                                    <a href="{% url 'admin:logout' %}" class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-red-500/10 text-red-400 transition-all duration-200">
+                                        <i class="fas fa-sign-out-alt"></i>
+                                        <span>Logout</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{% url 'accounts:login' %}" class="px-4 py-2 text-sm font-medium text-white/80 hover:text-white transition-all duration-200">
+                            Login
+                        </a>
+                        <a href="#" class="btn-primary">
+                            Sign Up
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Enhanced Mobile Sidebar -->
+    <div class="fixed inset-0 z-50 lg:hidden hidden" id="mobileSidebar">
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" id="sidebarOverlay"></div>
+        <div class="fixed left-0 top-0 h-full w-64 glass-effect transform -translate-x-full transition-transform duration-300" id="sidebarContent">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-8">
+                    <span class="font-bold text-xl gradient-text">ChatHub</span>
+                    <button class="text-white/80 hover:text-white transition-colors" id="closeSidebarBtn">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- Mobile Search -->
+                <div class="mb-6">
+                    <div class="relative">
+                        <input type="text" placeholder="Search..." 
+                               class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2 pl-10 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <i class="fas fa-search absolute left-3 top-3 text-white/60"></i>
+                    </div>
+                </div>
+                
+                <!-- Mobile Navigation -->
+                <nav class="space-y-2">
+                    <a href="{% url 'forums:home' %}" class="flex items-center space-x-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200">
+                        <i class="fas fa-home"></i>
+                        <span>Forums</span>
+                    </a>
+                    <a href="{% url 'events:list' %}" class="flex items-center space-x-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Events</span>
+                    </a>
+                    <a href="{% url 'chat:room_list' %}" class="flex items-center space-x-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200">
+                        <i class="fas fa-comment-dots"></i>
+                        <span>Chat</span>
+                    </a>
+                    
+                    {% if user.is_authenticated %}
+                        <hr class="my-4 border-white/10">
+                        <a href="{% url 'accounts:profile' user.id %}" class="flex items-center space-x-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200">
+                            <i class="fas fa-user"></i>
+                            <span>Profile</span>
+                        </a>
+                        <a href="#" class="flex items-center space-x-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <main class="min-h-screen">
+        {% block content %}{% endblock %}
+    </main>
+    <section class=" bg-gradient-to-r from-gray-700 via-gray-1000 to-gray-700">
+
+    
+    {% comment %} <!-- Enhanced Floating Action Button -->
+    <div class="floating-action" id="floatingAction">
+        <button class="w-0 h-0 gradient-bg rounded-full shadow-lg hover-glow flex items-center justify-center text-white transition-all duration-300" id="mainFAB">
+            <i class="fas fa-plus text-xl transform transition-transform duration-300" id="fabIcon"></i>
+        </button>
+    </div>
+    
+    <!-- Quick Actions Menu -->
+    <div class="quick-actions" id="quickActions">
+        <button class="quick-action-btn bg-green-500 hover:bg-green-600" style="animation-delay: 0.1s;" data-action="post" title="New Post">
+            <i class="fas fa-pen"></i>
+        </button>
+        <button class="quick-action-btn bg-blue-500 hover:bg-blue-600" style="animation-delay: 0.2s;" data-action="message" title="Messages">
+            <i class="fas fa-envelope"></i>
+        </button>
+        <button class="quick-action-btn bg-purple-500 hover:bg-purple-600" style="animation-delay: 0.3s;" data-action="event" title="Events">
+            <i class="fas fa-calendar"></i>
+        </button>
+        <button class="quick-action-btn bg-yellow-500 hover:bg-yellow-600" style="animation-delay: 0.4s;" data-action="bookmark" title="Bookmarks">
+            <i class="fas fa-bookmark"></i>
+        </button>
+    </div>
+    
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center hidden">
+        <div class="glass-effect p-8 rounded-2xl text-center">
+            <div class="w-16 h-16 mx-auto mb-4">
+                <div class="w-full h-full border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+            </div>
+            <p class="text-white">Loading...</p>
+        </div>
+    </div> {% endcomment %}
+    
+    <!-- Enhanced Footer -->
+    <footer class="glass-effect border-t border-white/10 mt-1">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <div class="flex items-center space-x-1 mb-4">
+                        <div class="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+                            <i class="fas fa-comments text-white"></i>
+                        </div>
+                        <span class="font-bold text-lg gradient-text">ChatHub</span>
+                    </div>
+                    <p class="text-white/60 text-sm">Modern community platform for seamless communication and collaboration.</p>
+                    
+                    <!-- Live Stats -->
+                    <div class="flex items-center space-x-4 mt-4 text-sm">
+                        <div class="flex items-center space-x-1">
+                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span class="text-white/60">Online: <span id="liveUserCount">127</span></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-4">Platform</h3>
+                    <ul class="space-y-2 text-sm text-white/60">
+                        <li><a href="#" class="hover:text-white transition-colors">Forums</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Events</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Chat Rooms</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Notifications</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-4">Support</h3>
+                    <ul class="space-y-2 text-sm text-white/60">
+                        <li><a href="#" class="hover:text-white transition-colors">Help Center</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Guidelines</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Contact</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Privacy</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-4">Connect</h3>
+                    <div class="flex space-x-3 mb-4">
+                        <a href="#" class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                            <i class="fab fa-twitter text-sm"></i>
+                        </a>
+                        <a href="#" class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                            <i class="fab fa-discord text-sm"></i>
+                        </a>
+                        <a href="#" class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                            <i class="fab fa-github text-sm"></i>
+                        </a>
+                    </div>
+                    
+                    <!-- Newsletter Signup -->
+                    <div class="space-y-2">
+                        <p class="text-sm text-white/60">Stay updated</p>
+                        <div class="flex">
+                            <input type="email" placeholder="Email" class="flex-1 bg-white/10 border border-white/20 rounded-l-lg px-3 py-1 text-sm text-white placeholder-white/60">
+                            <button class="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded-r-lg transition-colors">
+                                <i class="fas fa-arrow-right text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+    <!-- JavaScript -->
+    <script>
+        // ===== ENHANCED CHATUB FUNCTIONALITY =====
+        class ChatHubApp {
+            constructor() {
+                this.isOnline = navigator.onLine;
+                this.currentUser = {% if user.is_authenticated %}'{{ user.username }}'{% else %}null{% endif %};
+                this.websocket = null;
+                this.notifications = [];
+                this.theme = localStorage.getItem('chatub-theme') || 'dark';
+                
+                this.init();
+            }
+            
+            init() {
+                this.setupEventListeners();
+                this.setupWebSocket();
+                this.setupTheme();
+                this.startPerformanceMonitoring();
+                this.loadNotifications();
+                this.setupSearch();
+                this.setupQuickActions();
+            }
+            
+            setupEventListeners() {
+                // Mobile menu toggle
+                const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+                const mobileSidebar = document.getElementById('mobileSidebar');
+                const sidebarContent = document.getElementById('sidebarContent');
+                const sidebarOverlay = document.getElementById('sidebarOverlay');
+                const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+                
+                mobileMenuBtn?.addEventListener('click', () => this.openSidebar());
+                closeSidebarBtn?.addEventListener('click', () => this.closeSidebar());
+                sidebarOverlay?.addEventListener('click', () => this.closeSidebar());
+                
+                // User menu toggle
+                const userMenuBtn = document.getElementById('userMenuBtn');
+                const userDropdown = document.getElementById('userDropdown');
+                const userMenuChevron = document.getElementById('userMenuChevron');
+                
+                userMenuBtn?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    userDropdown.classList.toggle('hidden');
+                    userMenuChevron.style.transform = userDropdown.classList.contains('hidden') ? 'rotate(180deg)' : 'rotate(0deg)';
+                });
+                
+                // Notification menu toggle
+                const notificationBtn = document.getElementById('notificationBtn');
+                const notificationDropdown = document.getElementById('notificationDropdown');
+                
+                notificationBtn?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    notificationDropdown.classList.toggle('show');
+                });
+                
+                // Close dropdowns when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!userMenuBtn?.contains(e.target)) {
+                        userDropdown?.classList.remove('show');
+                        if (userMenuChevron) userMenuChevron.style.transform = 'rotate(0deg)';
+                    }
+                    if (!notificationBtn?.contains(e.target)) {
+                        notificationDropdown?.classList.remove('show');
+                    }
+                });
+                
+                // Theme toggle
+                const themeToggle = document.getElementById('themeToggle');
+                themeToggle?.addEventListener('click', () => this.toggleTheme());
+                
+                // Online/offline status
+                window.addEventListener('online', () => this.handleOnlineStatus(true));
+                window.addEventListener('offline', () => this.handleOnlineStatus(false));
+                
+                // Scroll progress indicator
+                window.addEventListener('scroll', () => this.updateScrollProgress());
+                
+                // Auto-hide elements on scroll
+                this.setupScrollBehavior();
+            }
+            
+            openSidebar() {
+                const mobileSidebar = document.getElementById('mobileSidebar');
+                const sidebarContent = document.getElementById('sidebarContent');
+                
+                mobileSidebar.classList.remove('hidden');
+                setTimeout(() => {
+                    sidebarContent.classList.remove('-translate-x-full');
+                }, 10);
+            }
+            
+            closeSidebar() {
+                const mobileSidebar = document.getElementById('mobileSidebar');
+                const sidebarContent = document.getElementById('sidebarContent');
+                
+                sidebarContent.classList.add('-translate-x-full');
+                setTimeout(() => {
+                    mobileSidebar.classList.add('hidden');
+                }, 300);
+            }
+            
+            setupWebSocket() {
+                if (!this.currentUser) return;
+                
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/notifications/`;
+                
+                try {
+                    this.websocket = new WebSocket(wsUrl);
+                    
+                    this.websocket.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.updateConnectionStatus(true);
+                    };
+                    
+                    this.websocket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleWebSocketMessage(data);
+                    };
+                    
+                    this.websocket.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        this.updateConnectionStatus(false);
+                        // Attempt to reconnect after 5 seconds
+                        setTimeout(() => this.setupWebSocket(), 5000);
+                    };
+                    
+                    this.websocket.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                    };
+                } catch (error) {
+                    console.error('Failed to establish WebSocket connection:', error);
+                }
+            }
+            
+            handleWebSocketMessage(data) {
+                switch (data.type) {
+                    case 'notification':
+                        this.addNotification(data.notification);
+                        break;
+                    case 'user_status':
+                        this.updateUserStatus(data.user_id, data.status);
+                        break;
+                    case 'activity_update':
+                        this.updateActivityIndicator(data.activity, data.count);
+                        break;
+                    case 'live_count':
+                        this.updateLiveUserCount(data.count);
+                        break;
+                }
+            }
+            
+            addNotification(notification) {
+                this.notifications.unshift(notification);
+                this.updateNotificationUI();
+                this.showToast(notification.message, 'info');
+            }
+            
+            updateUserStatus(userId, status) {
+                const userElements = document.querySelectorAll(`[data-user-id="${userId}"]`);
+                userElements.forEach(element => {
+                    const statusIndicator = element.querySelector('.status-indicator');
+                    if (statusIndicator) {
+                        statusIndicator.className = `status-indicator status-${status}`;
+                    }
+                    element.setAttribute('data-status', status);
+                });
+            }
+            
+            updateActivityIndicator(activity, count) {
+                const indicator = document.querySelector(`[data-activity="${activity}"]`);
+                if (indicator) {
+                    if (count > 0) {
+                        indicator.style.opacity = '1';
+                        indicator.style.animation = 'pulse-online 2s ease-in-out infinite';
+                    } else {
+                        indicator.style.opacity = '0';
+                    }
+                }
+            }
+            
+            updateLiveUserCount(count) {
+                const counter = document.getElementById('liveUserCount');
+                if (counter) {
+                    counter.textContent = count;
+                }
+            }
+            
+            setupTheme() {
+                document.documentElement.setAttribute('data-theme', this.theme);
+                const themeIcon = document.getElementById('themeIcon');
+                if (themeIcon) {
+                    themeIcon.className = this.theme === 'dark' ? 'fas fa-sun text-lg' : 'fas fa-moon text-lg';
+                }
+            }
+            
+            toggleTheme() {
+                this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('chatub-theme', this.theme);
+                this.setupTheme();
+                
+                // Animate theme transition
+                document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
+                setTimeout(() => {
+                    document.body.style.transition = '';
+                }, 300);
+            }
+            
+            setupSearch() {
+                const searchInput = document.getElementById('searchInput');
+                const searchResults = document.getElementById('searchResults');
+                
+                if (!searchInput) return;
+                
+                let searchTimeout;
+                
+                searchInput.addEventListener('input', (e) => {
+                    clearTimeout(searchTimeout);
+                    const query = e.target.value.trim();
+                    
+                    if (query.length > 2) {
+                        searchTimeout = setTimeout(() => {
+                            this.performSearch(query);
+                        }, 300);
+                    } else {
+                        searchResults.classList.add('hidden');
+                    }
+                });
+                
+                searchInput.addEventListener('focus', () => {
+                    if (searchInput.value.length > 2) {
+                        searchResults.classList.remove('hidden');
+                    }
+                });
+                
+                document.addEventListener('click', (e) => {
+                    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                        searchResults.classList.add('hidden');
+                    }
+                });
+            }
+            
+            async performSearch(query) {
+                try {
+                    const response = await fetch(`/api/search/?q=${encodeURIComponent(query)}`);
+                    const data = await response.json();
+                    
+                    this.displaySearchResults(data.results);
+                } catch (error) {
+                    console.error('Search failed:', error);
+                }
+            }
+            
+            displaySearchResults(results) {
+                const searchResults = document.getElementById('searchResults');
+                const resultsList = document.getElementById('searchResultsList');
+                
+                if (!results || results.length === 0) {
+                    resultsList.innerHTML = '<div class="text-sm text-white/60">No results found</div>';
+                } else {
+                    resultsList.innerHTML = results.map(result => `
+                        <div class="search-result p-2 hover:bg-white/5 rounded-lg cursor-pointer" data-url="${result.url}">
+                            <div class="font-medium text-white">${result.title}</div>
+                            <div class="text-xs text-white/60">${result.type} • ${result.date}</div>
+                        </div>
+                    `).join('');
+                    
+                    // Add click handlers
+                    resultsList.querySelectorAll('.search-result').forEach(item => {
+                        item.addEventListener('click', () => {
+                            window.location.href = item.getAttribute('data-url');
+                        });
+                    });
+                }
+                
+                searchResults.classList.remove('hidden');
+            }
+            
+            setupQuickActions() {
+                const mainFAB = document.getElementById('mainFAB');
+                const quickActions = document.getElementById('quickActions');
+                const fabIcon = document.getElementById('fabIcon');
+                
+                mainFAB?.addEventListener('click', () => {
+                    const isExpanded = quickActions.classList.contains('expanded');
+                    
+                    if (isExpanded) {
+                        quickActions.classList.remove('expanded');
+                        fabIcon.style.transform = 'rotate(0deg)';
+                    } else {
+                        quickActions.classList.add('expanded');
+                        fabIcon.style.transform = 'rotate(45deg)';
+                    }
+                });
+                
+                // Quick action handlers
+                document.querySelectorAll('[data-action]').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const action = e.currentTarget.getAttribute('data-action');
+                        this.handleQuickAction(action);
+                    });
+                });
+            }
+            
+            handleQuickAction(action) {
+                switch (action) {
+                    case 'post':
+                        this.showToast('Opening new post editor...', 'info');
+                        // Redirect to create post
+                        break;
+                    case 'message':
+                        window.location.href = '{% url "chat:room_list" %}';
+                        break;
+                    case 'event':
+                        window.location.href = '{% url "events:list" %}';
+                        break;
+                    case 'bookmark':
+                        this.showToast('Opening bookmarks...', 'info');
+                        break;
+                }
+                
+                // Close quick actions
+                document.getElementById('quickActions').classList.remove('expanded');
+                document.getElementById('fabIcon').style.transform = 'rotate(0deg)';
+            }
+            
+            loadNotifications() {
+                // Mock notifications for demo
+                this.notifications = [
+                    {
+                        id: 1,
+                        message: 'New message in Tech Discussion',
+                        time: '2 minutes ago',
+                        type: 'message',
+                        read: false
+                    },
+                    {
+                        id: 2,
+                        message: 'Event reminder: Tech Meetup tomorrow',
+                        time: '1 hour ago',
+                        type: 'event',
+                        read: false
+                    },
+                    {
+                        id: 3,
+                        message: 'You have a new follower',
+                        time: '3 hours ago',
+                        type: 'social',
+                        read: true
+                    }
+                ];
+                
+                this.updateNotificationUI();
+            }
+            
+            updateNotificationUI() {
+                const notificationCount = document.getElementById('notificationCount');
+                const notificationsList = document.getElementById('notificationsList');
+                
+                const unreadCount = this.notifications.filter(n => !n.read).length;
+                
+                if (notificationCount) {
+                    notificationCount.textContent = unreadCount;
+                    notificationCount.style.display = unreadCount > 0 ? 'flex' : 'none';
+                }
+                
+                if (notificationsList) {
+                    notificationsList.innerHTML = this.notifications.map(notification => `
+                        <div class="notification-item flex items-start space-x-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-all duration-200 ${!notification.read ? 'bg-blue-500/10' : ''}" data-id="${notification.id}">
+                            <div class="w-2 h-2 ${this.getNotificationColor(notification.type)} rounded-full mt-2 flex-shrink-0"></div>
+                            <div class="flex-1">
+                                <p class="text-sm ${!notification.read ? 'font-medium' : ''}">${notification.message}</p>
+                                <p class="text-xs text-white/60 mt-1">${notification.time}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    // Add click handlers for notifications
+                    notificationsList.querySelectorAll('.notification-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const id = parseInt(item.getAttribute('data-id'));
+                            this.markNotificationAsRead(id);
+                        });
+                    });
+                }
+            }
+            
+            getNotificationColor(type) {
+                const colors = {
+                    message: 'bg-blue-500',
+                    event: 'bg-green-500',
+                    social: 'bg-purple-500',
+                    system: 'bg-yellow-500'
+                };
+                return colors[type] || 'bg-gray-500';
+            }
+            
+            markNotificationAsRead(id) {
+                const notification = this.notifications.find(n => n.id === id);
+                if (notification) {
+                    notification.read = true;
+                    this.updateNotificationUI();
+                }
+            }
+            
+            showToast(message, type = 'info', duration = 3000) {
+                const toastContainer = document.getElementById('toastContainer');
+                if (!toastContainer) return;
+                
+                const toast = document.createElement('div');
+                toast.className = `glass-effect p-4 rounded-xl text-white transform translate-x-full transition-transform duration-300 ${this.getToastColor(type)}`;
+                
+                toast.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <i class="fas ${this.getToastIcon(type)}"></i>
+                        <span>${message}</span>
+                        <button class="ml-2 text-white/70 hover:text-white" onclick="this.parentElement.parentElement.remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                
+                toastContainer.appendChild(toast);
+                
+                // Animate in
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(0)';
+                }, 100);
+                
+                // Auto remove
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+            
+            getToastColor(type) {
+                const colors = {
+                    success: 'border-l-4 border-green-500',
+                    error: 'border-l-4 border-red-500',
+                    warning: 'border-l-4 border-yellow-500',
+                    info: 'border-l-4 border-blue-500'
+                };
+                return colors[type] || colors.info;
+            }
+            
+            getToastIcon(type) {
+                const icons = {
+                    success: 'fa-check-circle',
+                    error: 'fa-exclamation-circle',
+                    warning: 'fa-exclamation-triangle',
+                    info: 'fa-info-circle'
+                };
+                return icons[type] || icons.info;
+            }
+            
+            updateScrollProgress() {
+                const scrollProgress = (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
+                const indicator = document.getElementById('scrollIndicator');
+                if (indicator) {
+                    indicator.style.width = Math.min(scrollProgress, 100) + '%';
+                }
+            }
+            
+            setupScrollBehavior() {
+                let lastScrollY = window.scrollY;
+                const floatingAction = document.getElementById('floatingAction');
+                const mainNav = document.getElementById('mainNav');
+                
+                window.addEventListener('scroll', () => {
+                    const currentScrollY = window.scrollY;
+                    
+                    // Hide/show floating action
+                    if (floatingAction) {
+                        if (currentScrollY > lastScrollY && currentScrollY > 100) {
+                            floatingAction.style.transform = 'translateY(100px)';
+                        } else {
+                            floatingAction.style.transform = 'translateY(0)';
+                        }
+                    }
+                    
+                    // Add blur effect to navigation when scrolling
+                    if (mainNav) {
+                        if (currentScrollY > 50) {
+                            mainNav.style.backdropFilter = 'blur(20px)';
+                            mainNav.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+                        } else {
+                            mainNav.style.backdropFilter = 'blur(16px)';
+                            mainNav.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                        }
+                    }
+                    
+                    lastScrollY = currentScrollY;
+                });
+            }
+            
+            updateConnectionStatus(isConnected) {
+                const statusElements = document.querySelectorAll('[data-connection-status]');
+                statusElements.forEach(element => {
+                    element.textContent = isConnected ? 'Online' : 'Offline';
+                    element.className = isConnected ? 'text-green-400' : 'text-red-400';
+                });
+            }
+            
+            handleOnlineStatus(isOnline) {
+                this.isOnline = isOnline;
+                const message = isOnline ? 'Connection restored' : 'Connection lost';
+                const type = isOnline ? 'success' : 'warning';
+                this.showToast(message, type);
+                
+                if (isOnline && !this.websocket) {
+                    this.setupWebSocket();
+                }
+            }
+            
+            startPerformanceMonitoring() {
+                if (window.location.hostname === 'localhost' || window.location.hostname.includes('dev')) {
+                    const monitor = document.getElementById('performanceMonitor');
+                    if (monitor) {
+                        monitor.style.display = 'block';
+                        monitor.style.opacity = '1';
+                        
+                        let fps = 0;
+                        let lastTime = performance.now();
+                        
+                        const updateFPS = () => {
+                            const currentTime = performance.now();
+                            fps = Math.round(1000 / (currentTime - lastTime));
+                            lastTime = currentTime;
+                            
+                            document.getElementById('fpsCounter').textContent = fps;
+                            
+                            if (performance.memory) {
+                                const memory = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                                document.getElementById('memoryUsage').textContent = memory + 'MB';
+                            }
+                            
+                            requestAnimationFrame(updateFPS);
+                        };
+                        
+                        updateFPS();
+                    }
+                }
+            }
+        }
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            window.chatHubApp = new ChatHubApp();
+        });
+        
+        // Service Worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registered successfully');
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed');
+                    });
+            });
+        }
+        
+        // PWA Install prompt
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button
+            const installButton = document.createElement('button');
+            installButton.textContent = 'Install App';
+            installButton.className = 'fixed bottom-4 left-4 bg-purple-500 text-white px-4 py-2 rounded-lg z-50';
+            installButton.addEventListener('click', () => {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the A2HS prompt');
+                    }
+                    deferredPrompt = null;
+                    installButton.remove();
+                });
+            });
+            
+            document.body.appendChild(installButton);
+            
+            setTimeout(() => {
+                installButton.remove();
+            }, 10000);
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

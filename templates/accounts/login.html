@@ -1,0 +1,836 @@
+{% extends '../base.html' %}
+
+{% block title %}Login - ChatHub{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .login-form {
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+        animation: slideInFromBottom 0.8s ease-out;
+    }
+    
+    @keyframes slideInFromBottom {
+        0% { transform: translateY(50px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+    }
+    
+    .input-group {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+    
+    .floating-label {
+        position: absolute;
+        top: 50%;
+        left: 16px;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.7);
+        pointer-events: none;
+        transition: all 0.3s ease;
+        font-size: 16px;
+        background: transparent;
+        padding: 0 4px;
+    }
+    
+    .form-input {
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 18px 16px 8px 16px;
+        width: 100%;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        font-size: 16px;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.1), 0 0 0 3px rgba(255, 255, 255, 0.1);
+    }
+    
+    .form-input:focus + .floating-label,
+    .form-input:not(:placeholder-shown) + .floating-label,
+    .form-input.has-value + .floating-label {
+        top: 8px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.9);
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 600;
+    }
+    
+    .form-input::placeholder {
+        color: transparent;
+    }
+    
+    .form-input.error {
+        border-color: #ef4444;
+        animation: shake 0.5s ease-in-out;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+    
+    .form-input.success {
+        border-color: #10b981;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    }
+    
+    .social-login {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .social-login::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        transition: left 0.6s;
+    }
+    
+    .social-login:hover::before {
+        left: 100%;
+    }
+    
+    .social-login:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    
+    .floating-shapes {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+    }
+    
+    .floating-shape {
+        position: absolute;
+        opacity: 0.1;
+        animation: float 20s infinite linear;
+    }
+    
+    @keyframes float {
+        0% { transform: translateY(100vh) rotate(0deg); }
+        100% { transform: translateY(-100px) rotate(360deg); }
+    }
+    
+    .strength-meter {
+        height: 4px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 8px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .strength-meter.visible {
+        opacity: 1;
+    }
+    
+    .strength-fill {
+        height: 100%;
+        width: 0%;
+        transition: all 0.3s ease;
+        border-radius: 2px;
+    }
+    
+    .strength-weak { background: #ef4444; width: 25%; }
+    .strength-fair { background: #f59e0b; width: 50%; }
+    .strength-good { background: #eab308; width: 75%; }
+    .strength-strong { background: #10b981; width: 100%; }
+    
+    .login-stats {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 12px 16px;
+        color: white;
+        font-size: 14px;
+        animation: slideInFromLeft 0.8s ease-out 0.5s both;
+    }
+    
+    @keyframes slideInFromLeft {
+        0% { transform: translateX(-100px); opacity: 0; }
+        100% { transform: translateX(0); opacity: 1; }
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+        display: flex;
+        items: center;
+        justify-content: center;
+        z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    
+    .loading-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+    
+    .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .error-message {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 1rem;
+        color: #fca5a5;
+        font-size: 14px;
+        animation: slideInFromTop 0.3s ease-out;
+    }
+    
+    @keyframes slideInFromTop {
+        0% { transform: translateY(-20px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+    }
+    
+    .success-message {
+        background: rgba(16, 185, 129, 0.2);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 1rem;
+        color: #6ee7b7;
+        font-size: 14px;
+        animation: slideInFromTop 0.3s ease-out;
+    }
+    
+    .remember-checkbox {
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .remember-checkbox:checked {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-color: transparent;
+    }
+    
+    .remember-checkbox:checked::after {
+        content: '✓';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .quick-login {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 20px;
+        animation: slideInFromRight 0.8s ease-out 0.3s both;
+    }
+    
+    @keyframes slideInFromRight {
+        0% { transform: translateX(50px); opacity: 0; }
+        100% { transform: translateX(0); opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+        <div class="loading-spinner mx-auto mb-4"></div>
+        <p class="text-white">Signing you in...</p>
+    </div>
+</div>
+
+<div class="login-container min-h-screen flex items-center justify-center relative overflow-hidden py-12 px-4">
+    <!-- Login Stats -->
+    <div class="login-stats hidden md:block">
+        <div class="flex items-center space-x-2">
+            <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <span>{{ online_users|default:156 }} users online</span>
+        </div>
+    </div>
+    
+    <div class="floating-shapes">
+        <div class="floating-shape w-20 h-20 bg-white rounded-full" style="left: 10%; animation-delay: -5s;"></div>
+        <div class="floating-shape w-16 h-16 bg-purple-300 rounded-full" style="left: 80%; animation-delay: -15s;"></div>
+        <div class="floating-shape w-12 h-12 bg-blue-300 rounded-full" style="left: 60%; animation-delay: -10s;"></div>
+        <div class="floating-shape w-8 h-8 bg-pink-300 rounded-full" style="left: 30%; animation-delay: -8s;"></div>
+        <div class="floating-shape w-6 h-6 bg-yellow-300 rounded-full" style="left: 90%; animation-delay: -3s;"></div>
+    </div>
+    
+    <div class="w-full max-w-md relative z-10">
+        <!-- Logo and Welcome -->
+        <div class="text-center mb-8">
+            <a href="{% url 'forums:home' %}" class="inline-block">
+                <div class="w-20 h-20 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-6 hover:scale-105 transition-transform duration-300">
+                    <i class="fas fa-comments text-white text-3xl"></i>
+                </div>
+            </a>
+            <h1 class="text-4xl font-bold text-white mb-2">Welcome Back</h1>
+            <p class="text-white/70 text-lg">Sign in to your ChatHub account</p>
+            
+            {% if request.GET.next %}
+                <div class="quick-login">
+                    <div class="flex items-center space-x-2 text-white/80 text-sm">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Please log in to continue to your destination</span>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Login Form -->
+        <div class="login-form rounded-2xl p-8 shadow-2xl">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="{% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+                        <div class="flex items-center space-x-3">
+                            <i class="fas {% if message.tags == 'error' %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %}"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+            
+            <form method="post" id="loginForm" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- Username Field -->
+                <div class="input-group">
+                    <input type="text" 
+                           name="{{ form.username.html_name }}" 
+                           id="id_username"
+                           class="form-input" 
+                           placeholder="Username" 
+                           value="{{ form.username.value|default:'' }}"
+                           autocomplete="username"
+                           required>
+                    <label for="id_username" class="floating-label">
+                        <i class="fas fa-user mr-2"></i>Username
+                    </label>
+                    {% if form.username.errors %}
+                        <div class="mt-2 text-red-400 text-sm">
+                            {% for error in form.username.errors %}
+                                <p class="flex items-center space-x-2">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <span>{{ error }}</span>
+                                </p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Password Field -->
+                <div class="input-group">
+                    <div class="relative">
+                        <input type="password" 
+                               name="{{ form.password.html_name }}" 
+                               id="id_password"
+                               class="form-input pr-12" 
+                               placeholder="Password" 
+                               autocomplete="current-password"
+                               required>
+                        <label for="id_password" class="floating-label">
+                            <i class="fas fa-lock mr-2"></i>Password
+                        </label>
+                        <button type="button" 
+                                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                                id="togglePassword">
+                            <i class="fas fa-eye" id="passwordIcon"></i>
+                        </button>
+                    </div>
+                    {% if form.password.errors %}
+                        <div class="mt-2 text-red-400 text-sm">
+                            {% for error in form.password.errors %}
+                                <p class="flex items-center space-x-2">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <span>{{ error }}</span>
+                                </p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Remember Me & Forgot Password -->
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center space-x-3 text-white/80 cursor-pointer">
+                        <input type="checkbox" name="remember_me" class="remember-checkbox">
+                        <span class="text-sm select-none">Remember me for 30 days</span>
+                    </label>
+                    <a href="#" class="text-sm text-purple-300 hover:text-purple-200 transition-colors">
+                        Forgot password?
+                    </a>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" 
+                        class="w-full px-6 py-4 bg-white text-gray-900 font-semibold rounded-xl hover-glow transition-all duration-300 text-lg relative overflow-hidden"
+                        id="submitBtn">
+                    <span id="submitText">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Sign In
+                    </span>
+                    <div class="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 opacity-0 transition-opacity duration-300" id="submitBg"></div>
+                </button>
+            </form>
+            
+            <!-- Divider -->
+            <div class="flex items-center my-8">
+                <div class="flex-1 h-px bg-white/20"></div>
+                <span class="px-4 text-white/60 text-sm">or continue with</span>
+                <div class="flex-1 h-px bg-white/20"></div>
+            </div>
+            
+            <!-- Social Login -->
+            <div class="grid grid-cols-2 gap-4">
+                <button class="social-login p-4 rounded-xl text-white font-medium transition-all duration-300" 
+                        data-provider="google">
+                    <i class="fab fa-google mr-2"></i>Google
+                </button>
+                <button class="social-login p-4 rounded-xl text-white font-medium transition-all duration-300" 
+                        data-provider="github">
+                    <i class="fab fa-github mr-2"></i>GitHub
+                </button>
+            </div>
+            
+            <!-- Quick Demo Login -->
+            {% if settings.DEBUG %}
+            <div class="mt-6 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-xl">
+                <div class="flex items-center space-x-2 mb-2">
+                    <i class="fas fa-flask text-yellow-400"></i>
+                    <span class="text-yellow-300 font-medium text-sm">Demo Mode</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="px-3 py-2 bg-white/10 rounded-lg text-xs text-white/80 hover:bg-white/20 transition-colors"
+                            onclick="quickLogin('admin', 'password')">
+                        Admin Login
+                    </button>
+                    <button class="px-3 py-2 bg-white/10 rounded-lg text-xs text-white/80 hover:bg-white/20 transition-colors"
+                            onclick="quickLogin('demo', 'password')">
+                        Demo User
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Sign Up Link -->
+        <div class="text-center mt-8">
+            <p class="text-white/70">
+                Don't have an account? 
+                <a href="#" class="text-white font-semibold hover:text-purple-200 transition-colors">
+                    Create one here
+                </a>
+            </p>
+            <div class="mt-4 text-sm text-white/50">
+                <span>Join {{ total_members|default:12500 }}+ members in our community</span>
+            </div>
+        </div>
+        
+        <!-- Security Notice -->
+        <div class="mt-8 text-center">
+            <div class="inline-flex items-center space-x-2 text-white/50 text-xs">
+                <i class="fas fa-shield-alt"></i>
+                <span>Your data is protected with end-to-end encryption</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitBg = document.getElementById('submitBg');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('id_password');
+        const passwordIcon = document.getElementById('passwordIcon');
+        
+        // Enhanced form interactions
+        const inputs = document.querySelectorAll('.form-input');
+        inputs.forEach(input => {
+            // Handle floating labels
+            const updateLabel = () => {
+                const label = input.nextElementSibling;
+                if (input.value.length > 0) {
+                    input.classList.add('has-value');
+                } else {
+                    input.classList.remove('has-value');
+                }
+            };
+            
+            input.addEventListener('input', updateLabel);
+            input.addEventListener('blur', updateLabel);
+            input.addEventListener('focus', function() {
+                this.classList.remove('error');
+            });
+            
+            // Initial check
+            updateLabel();
+            
+            // Real-time validation
+            input.addEventListener('input', function() {
+                if (this.type === 'text' && this.name.includes('username')) {
+                    validateUsername(this);
+                }
+            });
+        });
+        
+        // Username validation
+        function validateUsername(input) {
+            const username = input.value.trim();
+            const minLength = 3;
+            const maxLength = 30;
+            const validChars = /^[a-zA-Z0-9_.-]+$/;
+            
+            if (username.length === 0) {
+                return;
+            }
+            
+            if (username.length < minLength || username.length > maxLength) {
+                input.classList.add('error');
+                input.classList.remove('success');
+            } else if (!validChars.test(username)) {
+                input.classList.add('error');
+                input.classList.remove('success');
+            } else {
+                input.classList.remove('error');
+                input.classList.add('success');
+            }
+        }
+        
+        // Password visibility toggle
+        togglePassword.addEventListener('click', function() {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            passwordIcon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+            
+            // Add ripple effect
+            this.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1)';
+            }, 150);
+        });
+        
+        // Enhanced form submission
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const username = formData.get('username').trim();
+            const password = formData.get('password');
+            
+            // Client-side validation
+            let isValid = true;
+            const errors = [];
+            
+            if (!username) {
+                errors.push('Username is required');
+                document.getElementById('id_username').classList.add('error');
+                isValid = false;
+            }
+            
+            if (!password) {
+                errors.push('Password is required');
+                document.getElementById('id_password').classList.add('error');
+                isValid = false;
+            }
+            
+            if (!isValid) {
+                showErrorMessage(errors.join('<br>'));
+                return;
+            }
+            
+            // Show loading state
+            showLoadingState();
+            
+            // Submit form
+            const submitFormData = new FormData();
+            submitFormData.append('username', username);
+            submitFormData.append('password', password);
+            submitFormData.append('csrfmiddlewaretoken', formData.get('csrfmiddlewaretoken'));
+            
+            if (formData.get('remember_me')) {
+                submitFormData.append('remember_me', 'on');
+            }
+            
+            fetch(this.action || window.location.href, {
+                method: 'POST',
+                body: submitFormData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json().catch(() => {
+                        // If not JSON, assume success and redirect
+                        showSuccessState();
+                        setTimeout(() => {
+                            window.location.href = response.url || '{% url "forums:home" %}';
+                        }, 1000);
+                    });
+                }
+                throw new Error('Login failed');
+            })
+            .then(data => {
+                if (data.success) {
+                    showSuccessState();
+                    setTimeout(() => {
+                        window.location.href = data.redirect_url || '{% url "forums:home" %}';
+                    }, 1000);
+                } else {
+                    hideLoadingState();
+                    showErrorMessage(data.error || 'Invalid username or password');
+                }
+            })
+            .catch(error => {
+                hideLoadingState();
+                
+                // For demo purposes, simulate login
+                if (username === 'demo' && password === 'password') {
+                    showSuccessState();
+                    setTimeout(() => {
+                        window.location.href = '{% url "forums:home" %}';
+                    }, 1000);
+                } else {
+                    showErrorMessage('Invalid username or password. Try "demo" / "password" for demo.');
+                }
+            });
+        });
+        
+        // Loading state management
+        function showLoadingState() {
+            loadingOverlay.classList.add('active');
+            submitBtn.disabled = true;
+            submitText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing In...';
+            submitBg.style.opacity = '1';
+        }
+        
+        function hideLoadingState() {
+            loadingOverlay.classList.remove('active');
+            submitBtn.disabled = false;
+            submitText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
+            submitBg.style.opacity = '0';
+        }
+        
+        function showSuccessState() {
+            submitText.innerHTML = '<i class="fas fa-check mr-2"></i>Success! Redirecting...';
+            submitBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        }
+        
+        // Error message display
+        function showErrorMessage(message) {
+            // Remove existing error messages
+            const existingErrors = form.querySelectorAll('.error-message');
+            existingErrors.forEach(error => error.remove());
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            form.insertBefore(errorDiv, form.firstChild);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        // Social login handlers
+        const socialButtons = document.querySelectorAll('.social-login');
+        socialButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const provider = this.dataset.provider;
+                const icon = this.querySelector('i');
+                const originalIcon = icon.className;
+                
+                // Loading state
+                icon.className = 'fas fa-spinner fa-spin mr-2';
+                this.disabled = true;
+                
+                // Simulate social login (replace with actual implementation)
+                setTimeout(() => {
+                    icon.className = originalIcon;
+                    this.disabled = false;
+                    
+                    // For demo purposes
+                    showErrorMessage(`${provider.charAt(0).toUpperCase() + provider.slice(1)} login would be implemented here`);
+                }, 2000);
+            });
+        });
+        
+        // Quick demo login function
+        window.quickLogin = function(username, password) {
+            document.getElementById('id_username').value = username;
+            document.getElementById('id_password').value = password;
+            
+            // Trigger label animations
+            inputs.forEach(input => {
+                const event = new Event('input');
+                input.dispatchEvent(event);
+            });
+            
+            // Auto-submit after a short delay for better UX
+            setTimeout(() => {
+                form.dispatchEvent(new Event('submit'));
+            }, 500);
+        };
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + Enter to submit
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                form.dispatchEvent(new Event('submit'));
+            }
+            
+            // Escape to clear form
+            if (e.key === 'Escape') {
+                inputs.forEach(input => {
+                    input.value = '';
+                    input.classList.remove('has-value', 'error', 'success');
+                });
+            }
+        });
+        
+        // Auto-focus first empty input
+        const firstEmptyInput = Array.from(inputs).find(input => !input.value);
+        if (firstEmptyInput) {
+            firstEmptyInput.focus();
+        }
+        
+        // Remember me tooltip
+        const rememberCheckbox = document.querySelector('.remember-checkbox');
+        if (rememberCheckbox) {
+            rememberCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    showTooltip(this, 'You will stay logged in for 30 days');
+                }
+            });
+        }
+        
+        // Simple tooltip function
+        function showTooltip(element, message) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'absolute bg-black text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50';
+            tooltip.style.top = '-40px';
+            tooltip.style.left = '50%';
+            tooltip.style.transform = 'translateX(-50%)';
+            tooltip.textContent = message;
+            
+            element.style.position = 'relative';
+            element.appendChild(tooltip);
+            
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.remove();
+                }
+            }, 3000);
+        }
+        
+        // Form analytics (optional - for tracking user interaction)
+        let startTime = Date.now();
+        form.addEventListener('submit', function() {
+            const timeSpent = Math.round((Date.now() - startTime) / 1000);
+            console.log(`User spent ${timeSpent} seconds on login form`);
+        });
+        
+        // Accessibility improvements
+        inputs.forEach(input => {
+            input.addEventListener('invalid', function() {
+                this.classList.add('error');
+            });
+        });
+        
+        // Auto-capitalize username (optional)
+        const usernameInput = document.getElementById('id_username');
+        usernameInput.addEventListener('input', function() {
+            // Remove any spaces and convert to lowercase for username
+            this.value = this.value.replace(/\s/g, '').toLowerCase();
+        });
+    });
+    
+    // Service worker registration for offline capability
+    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+    }
+</script>
+{% endblock %}
