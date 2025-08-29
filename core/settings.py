@@ -37,8 +37,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'accounts',
-    'chat', 
+    'chat.apps.ChatConfig', 
     'forums',
     'events',
     'notifications',
@@ -46,7 +47,7 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = 'accounts.User'
 
-ASGI_APPLICATION = 'main_project.asgi.application'
+ASGI_APPLICATION = 'core.asgi.application'
 
 CHANNEL_LAYERS = {
     'default': {
