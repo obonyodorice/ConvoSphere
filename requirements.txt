@@ -19,3 +19,4 @@ sqlparse==0.5.3
 tzdata==2025.2
 wheel==0.45.1
 whitenoise==6.8.2
+django-redis==6.0.0
