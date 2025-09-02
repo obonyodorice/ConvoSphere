@@ -246,6 +246,70 @@
     .notification-toast.warning {
         background: rgba(245, 158, 11, 0.95);
     }
+
+    /* Create room modal styles */
+    .modal-overlay {
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(5px);
+        animation: fadeIn 0.3s ease-out;
+    }
+    
+    .modal-content {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: slideInUp 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    @keyframes slideInUp {
+        from { transform: translateY(50px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .room-type-badge.type-group {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fcd34d;
+    }
+    
+    .room-type-badge.type-private {
+        background: rgba(139, 92, 246, 0.2);
+        color: #c4b5fd;
+    }
+    
+    .room-type-badge.type-forum {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+    }
+    
+    .room-type-badge.type-event {
+        background: rgba(16, 185, 129, 0.2);
+        color: #6ee7b7;
+    }
+    
+    .form-input {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        padding: 12px;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: rgba(102, 126, 234, 0.5);
+        background: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+    
+    .form-input::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+    }
 </style>
 {% endblock %}
 
@@ -258,6 +322,38 @@
 
 <!-- Toast Notifications -->
 <div id="toastContainer"></div>
+
+<!-- Create Room Modal -->
+<div id="createRoomModal" class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden">
+    <div class="modal-content rounded-xl p-6 w-full max-w-md mx-4">
+        <h3 class="text-xl font-bold text-white mb-4">Create New Room</h3>
+        <form id="createRoomForm">
+            <div class="mb-4">
+                <label class="block text-white/80 text-sm font-medium mb-2">Room Name</label>
+                <input type="text" name="name" class="form-input w-full" placeholder="Enter room name" required maxlength="100">
+            </div>
+            <div class="mb-4">
+                <label class="block text-white/80 text-sm font-medium mb-2">Room Type</label>
+                <select name="room_type" class="form-input w-full">
+                    <option value="group">Group Chat</option>
+                    <option value="forum">Forum Discussion</option>
+                    <option value="event">Event Chat</option>
+                    <option value="private">Private Chat</option>
+                </select>
+            </div>
+            <div class="mb-6">
+                <label class="block text-white/80 text-sm font-medium mb-2">Description (Optional)</label>
+                <textarea name="description" class="form-input w-full h-20" placeholder="Describe your room" maxlength="500"></textarea>
+            </div>
+            <div class="flex space-x-3">
+                <button type="button" class="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors" onclick="closeCreateRoomModal()">Cancel</button>
+                <button type="submit" class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover-glow transition-all duration-300">
+                    <i class="fas fa-plus mr-2"></i>Create Room
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <div class="min-h-screen bg-gray-900 flex">
     <!-- Enhanced Sidebar with Real-time Stats -->
@@ -276,7 +372,7 @@
                 </h3>
                 <div class="stat-item">
                     <span class="text-white/60 text-sm">Online Users</span>
-                    <span class="stat-value" id="onlineCount">{{ online_users|default:0 }}</span>
+                    <span class="stat-value" id="onlineCount">{{ online_users|length|default:0 }}</span>
                 </div>
                 <div class="stat-item">
                     <span class="text-white/60 text-sm">Active Rooms</span>
@@ -284,7 +380,7 @@
                 </div>
                 <div class="stat-item">
                     <span class="text-white/60 text-sm">Unread Messages</span>
-                    <span class="stat-value" id="totalUnread">0</span>
+                    <span class="stat-value" id="totalUnread">{{ total_unread|default:0 }}</span>
                 </div>
             </div>
             
@@ -300,46 +396,161 @@
             <!-- Room Categories with Live Counts -->
             <div class="flex flex-wrap gap-2 mb-4">
                 <button class="category-filter active px-3 py-1 text-sm rounded-full bg-white/10 text-white border border-white/20 transition-all duration-300 hover:bg-white/20" data-type="all">
-                    All <span id="allCount">({{ rooms.count }})</span>
+                    All <span id="allCount">({{ enhanced_rooms|length }})</span>
                 </button>
                 <button class="category-filter px-3 py-1 text-sm rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300" data-type="group">
-                    Groups <span id="groupCount">(0)</span>
+                    Groups <span id="groupCount">({{ room_type_counts.group }})</span>
                 </button>
                 <button class="category-filter px-3 py-1 text-sm rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300" data-type="private">
-                    Private <span id="privateCount">(0)</span>
+                    Private <span id="privateCount">({{ room_type_counts.private }})</span>
                 </button>
                 <button class="category-filter px-3 py-1 text-sm rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300" data-type="forum">
-                    Forums <span id="forumCount">(0)</span>
+                    Forums <span id="forumCount">({{ room_type_counts.forum }})</span>
                 </button>
                 <button class="category-filter px-3 py-1 text-sm rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300" data-type="event">
-                    Events <span id="eventCount">(0)</span>
+                    Events <span id="eventCount">({{ room_type_counts.event }})</span>
                 </button>
             </div>
         </div>
         
         <!-- Loading State -->
-        <div id="loadingState" class="p-6">
+        <div id="loadingState" class="p-6 hidden">
             <div class="loading-skeleton"></div>
             <div class="loading-skeleton"></div>
             <div class="loading-skeleton"></div>
         </div>
         
         <!-- Room List Container -->
-        <div class="flex-1 overflow-y-auto p-6" id="roomListContainer" style="display: none;">
+        <div class="flex-1 overflow-y-auto p-6" id="roomListContainer">
             <div class="space-y-3" id="roomList">
-                <!-- Rooms will be populated here via WebSocket -->
-            </div>
-            
-            <!-- Empty State -->
-            <div id="emptyState" class="text-center py-12" style="display: none;">
-                <div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-comment-slash text-white/60 text-2xl"></i>
-                </div>
-                <h3 class="font-semibold text-white mb-2">No Chat Rooms</h3>
-                <p class="text-white/60 text-sm mb-6">You haven't joined any chat rooms yet. Create or join one to start chatting!</p>
-                <button class="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover-glow transition-all duration-300" onclick="openCreateRoomModal()">
-                    <i class="fas fa-plus mr-2"></i>Create Room
-                </button>
+                <!-- Populate with enhanced rooms data -->
+                {% for room_data in enhanced_rooms %}
+                    <a href="/chat/room/{{ room_data.id }}/" 
+                       class="room-card block p-4 rounded-xl relative" 
+                       data-type="{{ room_data.room_type }}" 
+                       data-room-id="{{ room_data.id }}">
+                        
+                        <div class="flex items-center space-x-3">
+                            <!-- Room Avatar -->
+                            <div class="relative">
+                                {% if room_data.is_private and room_data.other_user %}
+                                    <div class="w-12 h-12 rounded-full overflow-hidden">
+                                        <img src="https://ui-avatars.com/api/?name={{ room_data.other_user.username }}&background=667eea&color=fff&size=48" 
+                                             alt="{{ room_data.other_user.username }}" class="w-full h-full object-cover">
+                                    </div>
+                                    {% if room_data.other_user.is_online %}
+                                        <div class="absolute -bottom-1 -right-1 w-3 h-3 status-online rounded-full border-2 border-gray-900"></div>
+                                    {% else %}
+                                        <div class="absolute -bottom-1 -right-1 w-3 h-3 status-away rounded-full border-2 border-gray-900"></div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="w-12 h-12 rounded-full bg-gradient-to-r 
+                                        {% if room_data.room_type == 'group' %}from-yellow-500 to-orange-500
+                                        {% elif room_data.room_type == 'forum' %}from-blue-500 to-indigo-500
+                                        {% elif room_data.room_type == 'event' %}from-green-500 to-teal-500
+                                        {% else %}from-purple-500 to-blue-500{% endif %} 
+                                        flex items-center justify-center text-white font-semibold">
+                                        <i class="fas 
+                                            {% if room_data.room_type == 'group' %}fa-users
+                                            {% elif room_data.room_type == 'forum' %}fa-comments
+                                            {% elif room_data.room_type == 'event' %}fa-calendar
+                                            {% else %}fa-user{% endif %}"></i>
+                                    </div>
+                                    {% if room_data.online_members_count > 0 %}
+                                        <div class="absolute -bottom-1 -right-1 w-3 h-3 status-online rounded-full border-2 border-gray-900"></div>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Room Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <h3 class="font-semibold text-white truncate">
+                                        {% if room_data.is_private and room_data.other_user %}
+                                            {{ room_data.other_user.display_name }}
+                                        {% else %}
+                                            {{ room_data.name }}
+                                        {% endif %}
+                                    </h3>
+                                    <span class="room-type-badge type-{{ room_data.room_type }} text-xs px-2 py-1 rounded-full">
+                                        {{ room_data.room_type|capfirst }}
+                                    </span>
+                                </div>
+                                
+                                <!-- Last message or room info -->
+                                <div class="room-info">
+                                    {% if room_data.last_message %}
+                                        <div class="room-preview text-sm text-white/60 truncate">
+                                            {% if room_data.last_message.message_type == 'file' %}
+                                                <i class="fas fa-file mr-1"></i>{{ room_data.last_message.sender }} sent a file
+                                            {% elif room_data.last_message.message_type == 'image' %}
+                                                <i class="fas fa-image mr-1"></i>{{ room_data.last_message.sender }} sent an image
+                                            {% else %}
+                                                <span class="font-medium">{{ room_data.last_message.sender }}:</span> {{ room_data.last_message.content }}
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        {% if room_data.is_private %}
+                                            <div class="member-count text-sm text-white/60">Private conversation</div>
+                                        {% else %}
+                                            <div class="member-count text-sm text-white/60">
+                                                <i class="fas fa-users mr-1"></i>{{ room_data.member_count }} members
+                                                {% if room_data.online_members_count > 0 %}
+                                                    • <span class="text-green-400">{{ room_data.online_members_count }} online</span>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Typing indicator -->
+                                <div class="typing-indicator-container" id="typing-{{ room_data.id }}" style="display: none;">
+                                    <div class="typing-indicator">
+                                        <span class="typing-text">Someone is typing...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Unread Count & Time -->
+                            <div class="text-right flex flex-col items-end">
+                                {% if room_data.unread_count > 0 %}
+                                    <div class="unread-badge w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold mb-1" id="unread-{{ room_data.id }}">
+                                        {% if room_data.unread_count > 99 %}99+{% else %}{{ room_data.unread_count }}{% endif %}
+                                    </div>
+                                {% elif room_data.has_unread %}
+                                    <div class="w-2 h-2 bg-red-500 rounded-full mb-2 animate-pulse" id="unread-{{ room_data.id }}"></div>
+                                {% else %}
+                                    <div id="unread-{{ room_data.id }}"></div>
+                                {% endif %}
+                                
+                                {% if room_data.last_message %}
+                                    <div class="text-xs text-white/50">
+                                        {% now "c" as current_time %}
+                                        {% if room_data.last_message.created_at|timeuntil:current_time < "1 hour" %}
+                                            Now
+                                        {% else %}
+                                            {{ room_data.last_message.created_at|date:"H:i" }}
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <div class="text-xs text-white/50">{{ room_data.created_at|date:"M j" }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </a>
+                {% empty %}
+                    <!-- Empty State -->
+                    <div id="emptyState" class="text-center py-12">
+                        <div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-comment-slash text-white/60 text-2xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-white mb-2">No Chat Rooms</h3>
+                        <p class="text-white/60 text-sm mb-6">You haven't joined any chat rooms yet. Create or join one to start chatting!</p>
+                        <button class="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover-glow transition-all duration-300" onclick="openCreateRoomModal()">
+                            <i class="fas fa-plus mr-2"></i>Create Room
+                        </button>
+                    </div>
+                {% endfor %}
             </div>
         </div>
         
@@ -350,7 +561,22 @@
                 Recent Activity
             </h3>
             <div class="activity-stream" id="activityStream">
-                <!-- Activity items will be populated here -->
+                {% for activity in recent_activities|slice:":5" %}
+                    <div class="activity-item" style="animation-delay: {{ forloop.counter0|mul:100 }}ms;">
+                        <div class="w-6 h-6 rounded-full overflow-hidden mr-2 flex-shrink-0">
+                            <img src="https://ui-avatars.com/api/?name={{ activity.user.username }}&background=random&size=24" 
+                                 alt="{{ activity.user.username }}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs text-white/70 leading-tight">
+                                <span class="font-medium text-white">{{ activity.user.display_name }}</span>
+                                {% if activity.event_type == 'message_sent' %}sent a message in{% elif activity.event_type == 'user_joined' %}joined{% elif activity.event_type == 'room_created' %}created{% endif %}
+                                <span class="text-purple-400">{{ activity.room.name }}</span>
+                            </p>
+                            <p class="text-xs text-white/40">{{ activity.timestamp|timesince }} ago</p>
+                        </div>
+                    </div>
+                {% endfor %}
             </div>
         </div>
     </div>
@@ -371,9 +597,22 @@
                 
                 <!-- Live Online Users Preview -->
                 <div id="onlineUsersPreview" class="mb-8">
-                    <h3 class="text-white font-semibold mb-4">Currently Online (<span id="onlineUsersCount">0</span>)</h3>
+                    <h3 class="text-white font-semibold mb-4">Currently Online (<span id="onlineUsersCount">{{ online_users|length }}</span>)</h3>
                     <div class="flex justify-center flex-wrap gap-2" id="onlineUsersList">
-                        <!-- Online users will be populated here -->
+                        {% for user in online_users|slice:":8" %}
+                            <div class="relative" title="{{ user.display_name }}">
+                                <div class="w-12 h-12 rounded-full overflow-hidden">
+                                    <img src="https://ui-avatars.com/api/?name={{ user.username }}&background=random&size=48" 
+                                         alt="{{ user.username }}" class="w-full h-full object-cover">
+                                </div>
+                                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>
+                            </div>
+                        {% endfor %}
+                        {% if online_users|length > 8 %}
+                            <div class="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white/60">
+                                <span class="text-sm">+{{ online_users|length|sub:8 }}</span>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -428,17 +667,12 @@
         }
         
         handleSocketOpen(event) {
-            console.log('WebSocket connected successfully');
+            console.log('Room list WebSocket connected');
             this.updateConnectionStatus('connected');
             this.reconnectAttempts = 0;
             
             // Request initial data
-            this.sendMessage({
-                type: 'request_room_data'
-            });
-            
-            // Start sending periodic activity updates
-            this.startActivityTracking();
+            this.sendMessage({ type: 'request_room_data' });
         }
         
         handleSocketMessage(event) {
@@ -451,16 +685,16 @@
         }
         
         handleSocketClose(event) {
-            console.log('WebSocket disconnected:', event.code, event.reason);
+            console.log('Room list WebSocket disconnected:', event.code, event.reason);
             this.updateConnectionStatus('disconnected');
             
-            if (!event.wasClean) {
+            if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.scheduleReconnect();
             }
         }
         
         handleSocketError(error) {
-            console.error('WebSocket error:', error);
+            console.error('Room list WebSocket error:', error);
             this.updateConnectionStatus('disconnected');
         }
         
@@ -495,12 +729,12 @@
                     this.handleRoomMemberUpdate(data);
                     break;
                     
-                case 'typing_update':
-                    this.handleTypingUpdate(data);
+                case 'room_created':
+                    this.handleRoomCreated(data);
                     break;
                     
-                case 'user_status_change':
-                    this.handleUserStatusChange(data);
+                case 'read_status_update':
+                    this.handleReadStatusUpdate(data);
                     break;
                     
                 case 'online_users_update':
@@ -510,27 +744,14 @@
                 case 'activity_update':
                     this.updateRecentActivities(data.recent_activities);
                     break;
+                    
+                case 'error':
+                    this.showNotification(data.message, 'error');
+                    break;
             }
         }
         
         updateRoomList(rooms) {
-            const roomListContainer = document.getElementById('roomListContainer');
-            const roomList = document.getElementById('roomList');
-            const loadingState = document.getElementById('loadingState');
-            const emptyState = document.getElementById('emptyState');
-            
-            // Hide loading state
-            loadingState.style.display = 'none';
-            roomListContainer.style.display = 'block';
-            
-            if (rooms.length === 0) {
-                roomList.innerHTML = '';
-                emptyState.style.display = 'block';
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            
             // Store rooms data
             this.rooms.clear();
             rooms.forEach(room => this.rooms.set(room.id, room));
@@ -550,6 +771,15 @@
         
         renderRoomCards(rooms) {
             const roomList = document.getElementById('roomList');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (rooms.length === 0) {
+                roomList.innerHTML = '';
+                if (emptyState) emptyState.style.display = 'block';
+                return;
+            }
+            
+            if (emptyState) emptyState.style.display = 'none';
             roomList.innerHTML = '';
             
             rooms.forEach((room, index) => {
@@ -567,19 +797,25 @@
             card.dataset.roomId = room.id;
             card.style.animation = 'slideInActivity 0.5s ease-out forwards';
             
-            const isPrivate = room.is_private;
-            const displayName = isPrivate && room.other_user ? 
+            const displayName = room.is_private && room.other_user ? 
                 room.other_user.display_name : room.name;
             
-            card.innerHTML = `
+            card.innerHTML = this.generateRoomCardHTML(room, displayName);
+            
+            // Add click handler for read marking
+            card.addEventListener('click', (e) => this.handleRoomClick(e, room));
+            
+            return card;
+        }
+        
+        generateRoomCardHTML(room, displayName) {
+            return `
                 <div class="flex items-center space-x-3">
-                    <!-- Room Avatar -->
                     <div class="relative">
                         ${this.createRoomAvatar(room)}
                         ${this.createStatusIndicator(room)}
                     </div>
                     
-                    <!-- Room Info -->
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center space-x-2 mb-1">
                             <h3 class="font-semibold text-white truncate">${displayName}</h3>
@@ -588,12 +824,10 @@
                             </span>
                         </div>
                         
-                        <!-- Last message or room info -->
                         <div class="room-info">
                             ${this.createRoomInfo(room)}
                         </div>
                         
-                        <!-- Typing indicator -->
                         <div class="typing-indicator-container" id="typing-${room.id}" style="display: none;">
                             <div class="typing-indicator">
                                 <span class="typing-text">Someone is typing...</span>
@@ -601,18 +835,12 @@
                         </div>
                     </div>
                     
-                    <!-- Unread Count & Time -->
                     <div class="text-right flex flex-col items-end">
                         ${this.createUnreadBadge(room)}
                         ${this.createTimestamp(room)}
                     </div>
                 </div>
             `;
-            
-            // Add click handler
-            card.addEventListener('click', (e) => this.handleRoomClick(e, room));
-            
-            return card;
         }
         
         createRoomAvatar(room) {
@@ -668,7 +896,7 @@
                 } else if (message.message_type === 'image') {
                     content = `<i class="fas fa-image mr-1"></i>${message.sender} sent an image`;
                 } else {
-                    content = `<span class="font-medium">${message.sender}:</span> ${message.content}`;
+                    content = `<span class="font-medium">${message.sender}:</span> ${this.escapeHtml(message.content)}`;
                 }
                 
                 return `<div class="room-preview text-sm text-white/60 truncate">${content}</div>`;
@@ -721,34 +949,29 @@
         
         handleNewMessage(data) {
             const room = this.rooms.get(data.room_id);
-            if (!room) return;
-            
-            // Update room data
-            room.last_message = {
-                content: data.message.content,
-                sender: data.sender.username,
-                created_at: data.timestamp,
-                message_type: data.message.message_type || 'text'
-            };
-            room.unread_count = data.unread_count;
-            room.has_unread = data.unread_count > 0;
-            
-            // Update room card
-            this.updateSingleRoomCard(room);
-            
-            // Show notification if not in room
-            if (!window.location.pathname.includes(`/chat/room/${data.room_id}/`)) {
-                this.showNotification(
-                    `New message from ${data.sender.username} in ${room.name}`,
-                    'info',
-                    5000
-                );
+            if (room) {
+                // Update room data
+                room.last_message = data.message;
+                room.unread_count = data.unread_count;
+                room.has_unread = data.unread_count > 0;
                 
-                // Add visual feedback
-                const roomCard = document.querySelector(`[data-room-id="${data.room_id}"]`);
-                if (roomCard) {
-                    roomCard.classList.add('has-new-message');
-                    setTimeout(() => roomCard.classList.remove('has-new-message'), 2000);
+                // Update room card
+                this.updateSingleRoomCard(room);
+                
+                // Show notification if not in current room
+                if (!window.location.pathname.includes(`/chat/room/${data.room_id}/`)) {
+                    this.showNotification(
+                        `New message from ${data.sender.username}`,
+                        'info',
+                        5000
+                    );
+                    
+                    // Add visual feedback
+                    const roomCard = document.querySelector(`[data-room-id="${data.room_id}"]`);
+                    if (roomCard) {
+                        roomCard.classList.add('has-new-message');
+                        setTimeout(() => roomCard.classList.remove('has-new-message'), 2000);
+                    }
                 }
             }
             
@@ -758,35 +981,34 @@
         
         handleRoomMemberUpdate(data) {
             const room = this.rooms.get(data.room_id);
-            if (!room) return;
-            
-            room.member_count = data.member_count;
-            room.online_members_count = data.online_count;
-            
-            this.updateSingleRoomCard(room);
-            
-            // Show activity notification
-            const actionText = data.action === 'joined' ? 'joined' : 'left';
-            this.showNotification(`${data.user.username} ${actionText} ${room.name}`, 'info', 3000);
+            if (room) {
+                room.member_count = data.member_count;
+                room.online_members_count = data.online_count;
+                this.updateSingleRoomCard(room);
+                
+                // Show activity notification
+                const actionText = data.action === 'joined' ? 'joined' : 'left';
+                this.showNotification(`${data.user.username} ${actionText} ${room.name}`, 'info', 3000);
+            }
         }
         
-        handleTypingUpdate(data) {
-            const typingContainer = document.getElementById(`typing-${data.room_id}`);
-            if (!typingContainer) return;
+        handleRoomCreated(data) {
+            // Add new room to the list
+            this.rooms.set(data.room.id, data.room);
             
-            if (data.is_typing) {
-                const typingText = typingContainer.querySelector('.typing-text');
-                typingText.textContent = `${data.user} is typing...`;
-                typingContainer.style.display = 'block';
-                
-                // Auto-hide after 3 seconds
-                clearTimeout(this.typingUsers.get(data.room_id));
-                this.typingUsers.set(data.room_id, setTimeout(() => {
-                    typingContainer.style.display = 'none';
-                }, 3000));
-            } else {
-                typingContainer.style.display = 'none';
-                clearTimeout(this.typingUsers.get(data.room_id));
+            // Re-render room list
+            this.renderRoomCards(Array.from(this.rooms.values()));
+            
+            // Show notification
+            this.showNotification(`Room "${data.room.name}" created by ${data.creator.username}`, 'info', 5000);
+        }
+        
+        handleReadStatusUpdate(data) {
+            const room = this.rooms.get(data.room_id);
+            if (room) {
+                room.unread_count = data.unread_count;
+                room.has_unread = data.unread_count > 0;
+                this.updateSingleRoomCard(room);
             }
         }
         
@@ -794,37 +1016,11 @@
             const roomCard = document.querySelector(`[data-room-id="${room.id}"]`);
             if (!roomCard) return;
             
-            // Update room info
-            const roomInfo = roomCard.querySelector('.room-info');
-            roomInfo.innerHTML = this.createRoomInfo(room);
+            // Update the entire card content
+            const displayName = room.is_private && room.other_user ? 
+                room.other_user.display_name : room.name;
             
-            // Update unread badge
-            const unreadElement = document.getElementById(`unread-${room.id}`);
-            if (unreadElement) {
-                unreadElement.outerHTML = this.createUnreadBadge(room);
-                
-                // Add animation to new badge
-                const newBadge = document.getElementById(`unread-${room.id}`);
-                if (newBadge && newBadge.classList.contains('unread-badge')) {
-                    newBadge.classList.add('updating');
-                    setTimeout(() => newBadge.classList.remove('updating'), 600);
-                }
-            }
-            
-            // Update timestamp
-            const timestamp = roomCard.querySelector('.text-xs.text-white\\/50');
-            if (timestamp) {
-                timestamp.outerHTML = this.createTimestamp(room);
-            }
-            
-            // Update status indicator
-            const statusIndicator = roomCard.querySelector('.status-online, .status-away');
-            const avatarContainer = roomCard.querySelector('.relative');
-            const existingIndicator = avatarContainer.querySelector('.absolute');
-            if (existingIndicator) {
-                existingIndicator.remove();
-            }
-            avatarContainer.insertAdjacentHTML('beforeend', this.createStatusIndicator(room));
+            roomCard.innerHTML = this.generateRoomCardHTML(room, displayName);
         }
         
         updateOnlineUsers(users) {
@@ -845,10 +1041,10 @@
             
             if (onlineUsersList && users.length > 0) {
                 onlineUsersList.innerHTML = users.slice(0, 8).map(user => `
-                    <div class="relative" title="${user.display_name}">
+                    <div class="relative" title="${this.escapeHtml(user.display_name)}">
                         <div class="w-12 h-12 rounded-full overflow-hidden">
                             <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random&size=48" 
-                                 alt="${user.username}" class="w-full h-full object-cover">
+                                 alt="${this.escapeHtml(user.username)}" class="w-full h-full object-cover">
                         </div>
                         <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>
                     </div>
@@ -868,18 +1064,28 @@
                 <div class="activity-item" style="animation-delay: ${index * 100}ms;">
                     <div class="w-6 h-6 rounded-full overflow-hidden mr-2 flex-shrink-0">
                         <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(activity.user.username)}&background=random&size=24" 
-                             alt="${activity.user.username}" class="w-full h-full object-cover">
+                             alt="${this.escapeHtml(activity.user.username)}" class="w-full h-full object-cover">
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-xs text-white/70 leading-tight">
-                            <span class="font-medium text-white">${activity.user.display_name}</span>
-                            sent a message in
-                            <span class="text-purple-400">${activity.room.name}</span>
+                            <span class="font-medium text-white">${this.escapeHtml(activity.user.display_name)}</span>
+                            ${this.getActivityText(activity.event_type)}
+                            <span class="text-purple-400">${this.escapeHtml(activity.room.name)}</span>
                         </p>
                         <p class="text-xs text-white/40">${this.formatRelativeTime(activity.timestamp)}</p>
                     </div>
                 </div>
             `).join('');
+        }
+        
+        getActivityText(eventType) {
+            switch(eventType) {
+                case 'message_sent': return 'sent a message in';
+                case 'user_joined': return 'joined';
+                case 'user_left': return 'left';
+                case 'room_created': return 'created';
+                default: return 'updated';
+            }
         }
         
         updateCategoryCounts(rooms) {
@@ -911,27 +1117,18 @@
         }
         
         handleRoomClick(event, room) {
-            // Mark room as read
+            // Mark room as read when clicking
             this.sendMessage({
                 type: 'mark_room_read',
                 room_id: room.id
             });
-            
-            // Update unread count immediately for better UX
-            const unreadElement = document.getElementById(`unread-${room.id}`);
-            if (unreadElement) {
-                unreadElement.style.opacity = '0';
-                unreadElement.style.transform = 'scale(0)';
-                setTimeout(() => {
-                    unreadElement.innerHTML = '';
-                }, 300);
-            }
         }
         
         updateConnectionStatus(status) {
             this.connectionStatus = status;
             const statusElement = document.getElementById('connectionStatus');
-            const statusText = document.getElementById('statusText');
+            
+            if (!statusElement) return;
             
             statusElement.className = `connection-status ${status}`;
             
@@ -954,12 +1151,14 @@
         
         showNotification(message, type = 'info', duration = 3000) {
             const container = document.getElementById('toastContainer');
+            if (!container) return;
+            
             const toast = document.createElement('div');
             
             toast.className = `notification-toast ${type}`;
             toast.innerHTML = `
                 <div class="flex items-center justify-between">
-                    <span>${message}</span>
+                    <span>${this.escapeHtml(message)}</span>
                     <button class="ml-2 text-white/80 hover:text-white" onclick="this.parentElement.parentElement.remove()">
                         <i class="fas fa-times text-sm"></i>
                     </button>
@@ -989,14 +1188,15 @@
         setupEventListeners() {
             // Search functionality
             const searchInput = document.getElementById('roomSearch');
-            let searchTimeout;
-            
-            searchInput.addEventListener('input', (e) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this.filterRooms(e.target.value.toLowerCase());
-                }, 300);
-            });
+            if (searchInput) {
+                let searchTimeout;
+                searchInput.addEventListener('input', (e) => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        this.filterRooms(e.target.value.toLowerCase());
+                    }, 300);
+                });
+            }
             
             // Category filters
             document.querySelectorAll('.category-filter').forEach(filter => {
@@ -1005,75 +1205,64 @@
                 });
             });
             
-            // Refresh button
-            window.refreshRoomList = () => {
-                const refreshIcon = document.getElementById('refreshIcon');
-                refreshIcon.classList.add('fa-spin');
-                
-                this.sendMessage({ type: 'request_room_data' });
-                
-                setTimeout(() => {
-                    refreshIcon.classList.remove('fa-spin');
-                }, 1000);
-            };
+            // Create room form
+            const createForm = document.getElementById('createRoomForm');
+            if (createForm) {
+                createForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleCreateRoom(e);
+                });
+            }
             
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                     e.preventDefault();
-                    searchInput.focus();
-                    searchInput.select();
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
                 }
                 
-                if (e.key === 'Escape' && document.activeElement === searchInput) {
-                    searchInput.value = '';
-                    searchInput.blur();
-                    this.filterRooms('');
-                }
-            });
-            
-            // Page visibility change handling
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) {
-                    // User returned to page, send activity update
-                    this.sendMessage({ type: 'user_activity' });
-                }
-            });
-            
-            // Before unload cleanup
-            window.addEventListener('beforeunload', () => {
-                if (this.socket) {
-                    this.socket.close();
+                if (e.key === 'Escape') {
+                    if (document.activeElement === searchInput) {
+                        searchInput.value = '';
+                        searchInput.blur();
+                        this.filterRooms('');
+                    }
+                    closeCreateRoomModal();
                 }
             });
         }
         
-        startPeriodicTasks() {
-            // Send periodic activity updates
-            setInterval(() => {
-                this.sendMessage({ type: 'user_activity' });
-            }, 30000); // Every 30 seconds
-            
-            // Update relative timestamps
-            setInterval(() => {
-                this.updateAllTimestamps();
-            }, 60000); // Every minute
-        }
-        
-        startActivityTracking() {
-            // Track user activity
-            let activityTimer;
-            
-            const trackActivity = () => {
-                clearTimeout(activityTimer);
-                activityTimer = setTimeout(() => {
-                    this.sendMessage({ type: 'user_activity' });
-                }, 1000);
+        handleCreateRoom(event) {
+            const formData = new FormData(event.target);
+            const roomData = {
+                type: 'create_room',
+                name: formData.get('name').trim(),
+                room_type: formData.get('room_type'),
+                description: formData.get('description').trim()
             };
             
-            ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
-                document.addEventListener(event, trackActivity, { passive: true });
-            });
+            // Validation
+            if (!roomData.name) {
+                this.showNotification('Room name is required', 'error');
+                return;
+            }
+            
+            if (roomData.name.length > 100) {
+                this.showNotification('Room name too long (max 100 characters)', 'error');
+                return;
+            }
+            
+            // Send via WebSocket
+            this.sendMessage(roomData);
+            
+            // Close modal
+            closeCreateRoomModal();
+            
+            // Show creating message
+            this.showNotification('Creating room...', 'info', 2000);
         }
         
         filterRooms(searchTerm) {
@@ -1158,9 +1347,9 @@
                             <i class="fas fa-search text-white/60 text-2xl"></i>
                         </div>
                         <h3 class="font-semibold text-white mb-2">No rooms found</h3>
-                        <p class="text-white/60 text-sm mb-4">No rooms match "${searchTerm}". Try different keywords or create a new room.</p>
+                        <p class="text-white/60 text-sm mb-4">No rooms match "${this.escapeHtml(searchTerm)}". Try different keywords or create a new room.</p>
                         <button class="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover-glow transition-all duration-300" onclick="openCreateRoomModal()">
-                            <i class="fas fa-plus mr-2"></i>Create "${searchTerm}" Room
+                            <i class="fas fa-plus mr-2"></i>Create "${this.escapeHtml(searchTerm)}" Room
                         </button>
                     `;
                     document.getElementById('roomList').appendChild(noResultsMsg);
@@ -1168,25 +1357,20 @@
                     const description = noResultsMsg.querySelector('p');
                     const button = noResultsMsg.querySelector('button');
                     description.textContent = `No rooms match "${searchTerm}". Try different keywords or create a new room.`;
-                    button.innerHTML = `<i class="fas fa-plus mr-2"></i>Create "${searchTerm}" Room`;
+                    button.innerHTML = `<i class="fas fa-plus mr-2"></i>Create "${this.escapeHtml(searchTerm)}" Room`;
                 }
             } else if (noResultsMsg) {
                 noResultsMsg.remove();
             }
         }
         
-        updateAllTimestamps() {
-            const rooms = Array.from(this.rooms.values());
-            rooms.forEach(room => {
-                const roomCard = document.querySelector(`[data-room-id="${room.id}"]`);
-                if (roomCard) {
-                    const timestamp = roomCard.querySelector('.text-xs.text-white\\/50:last-child');
-                    if (timestamp) {
-                        const timeHtml = this.createTimestamp(room);
-                        timestamp.outerHTML = timeHtml;
-                    }
+        startPeriodicTasks() {
+            // Send periodic activity updates
+            setInterval(() => {
+                if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                    this.sendMessage({ type: 'user_activity' });
                 }
-            });
+            }, 30000); // Every 30 seconds
         }
         
         formatRelativeTime(timestamp) {
@@ -1202,6 +1386,12 @@
             if (diffHours < 24) return `${diffHours}h ago`;
             if (diffDays < 7) return `${diffDays}d ago`;
             return date.toLocaleDateString();
+        }
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         
         // Public methods
@@ -1226,183 +1416,79 @@
         }
     }
     
-    // Additional utility functions
-    window.openCreateRoomModal = function() {
-        // Create modal implementation
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50';
-        modal.id = 'createRoomModal';
-        modal.innerHTML = `
-            <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4 border border-white/10 transform transition-all duration-300 scale-95 opacity-0">
-                <h3 class="text-xl font-bold text-white mb-4">Create New Room</h3>
-                <form id="createRoomForm">
-                    <div class="mb-4">
-                        <label class="block text-white/80 text-sm font-medium mb-2">Room Name</label>
-                        <input type="text" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:border-purple-500" placeholder="Enter room name" required>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-white/80 text-sm font-medium mb-2">Room Type</label>
-                        <select class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-purple-500">
-                            <option value="group">Group Chat</option>
-                            <option value="forum">Forum Discussion</option>
-                            <option value="event">Event Chat</option>
-                        </select>
-                    </div>
-                    <div class="mb-6">
-                        <label class="block text-white/80 text-sm font-medium mb-2">Description (Optional)</label>
-                        <textarea class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:border-purple-500 h-20" placeholder="Describe your room"></textarea>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button type="button" class="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors" onclick="closeCreateRoomModal()">Cancel</button>
-                        <button type="submit" class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover-glow transition-all duration-300">Create Room</button>
-                    </div>
-                </form>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Animate in
-        setTimeout(() => {
-            const modalContent = modal.querySelector('.bg-gray-800');
-            modalContent.classList.remove('scale-95', 'opacity-0');
-            modalContent.classList.add('scale-100', 'opacity-100');
-        }, 10);
-        
-        // Focus first input
-        setTimeout(() => modal.querySelector('input').focus(), 100);
-        
-        // Handle form submission
-        modal.querySelector('#createRoomForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            closeCreateRoomModal();
-            realTimeRoomList.showNotification('Room creation feature coming soon!', 'info');
-        });
-        
-        // Close on outside click
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-                closeCreateRoomModal();
-            }
-        });
-    };
-    
-    window.closeCreateRoomModal = function() {
+    // Modal functions
+    function openCreateRoomModal() {
         const modal = document.getElementById('createRoomModal');
         if (modal) {
-            const modalContent = modal.querySelector('.bg-gray-800');
-            modalContent.classList.add('scale-95', 'opacity-0');
-            modalContent.classList.remove('scale-100', 'opacity-100');
-            
-            setTimeout(() => modal.remove(), 300);
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.querySelector('input[name="name"]').focus(), 100);
         }
-    };
+    }
     
-    // Initialize the real-time room list when DOM is loaded
+    function closeCreateRoomModal() {
+        const modal = document.getElementById('createRoomModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            // Reset form
+            const form = modal.querySelector('#createRoomForm');
+            if (form) form.reset();
+        }
+    }
+    
+    // Refresh function
+    function refreshRoomList() {
+        const refreshIcon = document.getElementById('refreshIcon');
+        if (refreshIcon) {
+            refreshIcon.classList.add('fa-spin');
+        }
+        
+        if (window.realTimeRoomList) {
+            window.realTimeRoomList.sendMessage({ type: 'request_room_data' });
+        }
+        
+        setTimeout(() => {
+            if (refreshIcon) {
+                refreshIcon.classList.remove('fa-spin');
+            }
+        }, 1000);
+    }
+    
+    // Initialize when DOM is ready
     let realTimeRoomList;
     
     document.addEventListener('DOMContentLoaded', function() {
         realTimeRoomList = new RealTimeRoomList();
-        
-        // Make it globally accessible for debugging
         window.realTimeRoomList = realTimeRoomList;
         
-        // Add some helpful console commands for debugging
+        // Make functions global
+        window.openCreateRoomModal = openCreateRoomModal;
+        window.closeCreateRoomModal = closeCreateRoomModal;
+        window.refreshRoomList = refreshRoomList;
+        
         console.log('Real-time room list initialized!');
-        console.log('Available commands:');
-        console.log('- realTimeRoomList.reconnect() - Force reconnect WebSocket');
-        console.log('- realTimeRoomList.getConnectionStatus() - Get connection status');
-        console.log('- realTimeRoomList.getRoomCount() - Get room count');
-        console.log('- realTimeRoomList.getTotalUnreadCount() - Get total unread count');
     });
     
-    // Handle page visibility changes for better performance
+    // Handle page visibility changes
     document.addEventListener('visibilitychange', function() {
-        if (realTimeRoomList) {
-            if (document.hidden) {
-                console.log('Page hidden - reducing WebSocket activity');
-            } else {
-                console.log('Page visible - resuming normal WebSocket activity');
-                // Request fresh data when user returns
-                realTimeRoomList.sendMessage({ type: 'request_room_data' });
-            }
+        if (realTimeRoomList && !document.hidden) {
+            // Request fresh data when user returns
+            realTimeRoomList.sendMessage({ type: 'request_room_data' });
         }
     });
     
-    // Service Worker for offline functionality
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js')
-                .then(registration => console.log('ServiceWorker registered'))
-                .catch(error => console.log('ServiceWorker registration failed'));
-        });
-    }
+    // Close modal when clicking outside
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('createRoomModal');
+        if (modal && e.target === modal) {
+            closeCreateRoomModal();
+        }
+    });
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (realTimeRoomList && realTimeRoomList.socket) {
+            realTimeRoomList.socket.close();
+        }
+    });
 </script>
-
-<!-- Add some helpful CSS for better room type badges -->
-<style>
-    .room-type-badge.type-group {
-        background: rgba(245, 158, 11, 0.2);
-        color: #fcd34d;
-    }
-    
-    .room-type-badge.type-private {
-        background: rgba(139, 92, 246, 0.2);
-        color: #c4b5fd;
-    }
-    
-    .room-type-badge.type-forum {
-        background: rgba(59, 130, 246, 0.2);
-        color: #93c5fd;
-    }
-    
-    .room-type-badge.type-event {
-        background: rgba(16, 185, 129, 0.2);
-        color: #6ee7b7;
-    }
-    
-    /* Enhanced loading states */
-    .room-card {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .room-card:hover {
-        transform: translateY(-2px) scale(1.01);
-    }
-    
-    /* Better scrollbar for activity stream */
-    .activity-stream::-webkit-scrollbar {
-        width: 4px;
-    }
-    
-    .activity-stream::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 2px;
-    }
-    
-    .activity-stream::-webkit-scrollbar-thumb {
-        background: rgba(102, 126, 234, 0.5);
-        border-radius: 2px;
-    }
-    
-    .activity-stream::-webkit-scrollbar-thumb:hover {
-        background: rgba(102, 126, 234, 0.7);
-    }
-    
-    /* Improved hover effects */
-    .stat-value:hover {
-        transform: scale(1.1);
-        color: #667eea !important;
-    }
-    
-    /* Better focus states */
-    .category-filter:focus {
-        outline: 2px solid rgba(102, 126, 234, 0.5);
-        outline-offset: 2px;
-    }
-    
-    #roomSearch:focus {
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
-    }
-</style>
 {% endblock %}
