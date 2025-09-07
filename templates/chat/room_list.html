@@ -562,7 +562,7 @@
             </h3>
             <div class="activity-stream" id="activityStream">
                 {% for activity in recent_activities|slice:":5" %}
-                    <div class="activity-item" style="animation-delay: {{ forloop.counter0|mul:100 }}ms;">
+                    <div class="activity-item" style="animation-delay: {% widthratio forloop.counter0 1 100 %}ms;">
                         <div class="w-6 h-6 rounded-full overflow-hidden mr-2 flex-shrink-0">
                             <img src="https://ui-avatars.com/api/?name={{ activity.user.username }}&background=random&size=24" 
                                  alt="{{ activity.user.username }}" class="w-full h-full object-cover">
@@ -610,7 +610,7 @@
                         {% endfor %}
                         {% if online_users|length > 8 %}
                             <div class="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white/60">
-                                <span class="text-sm">+{{ online_users|length|sub:8 }}</span>
+                                <span class="text-sm">+{{ online_users|length|add:"-8" }}</span>
                             </div>
                         {% endif %}
                     </div>
