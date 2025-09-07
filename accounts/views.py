@@ -19,3 +19,6 @@ def update_status(request):
         request.user.is_online = request.POST.get('is_online', False)
         request.user.save()
         return JsonResponse({'status': 'updated'})
+
+def logout_view(request):
+    return auth_views.LogoutView.as_view(next_page='accounts:login')(request)
