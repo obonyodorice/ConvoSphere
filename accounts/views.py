@@ -7,6 +7,9 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.utils import timezone
+from django.db.models import Count, Q
+from datetime import timedelta
 from .models import User, UserActivity
 from .forms import SignUpForm, ProfileForm, LoginForm
 import json
@@ -84,7 +87,7 @@ def logout_view(request):
     
     logout(request)
     messages.info(request, 'You have been logged out.')
-    return redirect('accounts:login')
+    return redirect('accounts:home')
 
 
 @login_required
@@ -230,6 +233,226 @@ def update_online_status(request):
 
 def calculate_profile_completion(user):
 
+    fields = ['first_name', 'last_name', 'bio', 'avatar', 'location']
+    completed = sum(1 for field in fields if getattr(user, field))
+    return int((completed / len(fields)) * 100)
+
+
+def home_view(request):
+    context = {
+        'page_title': 'Home - Community Platform',
+        'show_hero': True,
+    }
+    if request.user.is_authenticated:
+        context.update({
+            'user_stats': {
+                'posts': request.user.total_posts,
+                'events': request.user.total_events_attended,
+                'followers': request.user.followers.count(),
+                'following': request.user.following.count(),
+            }
+        })
+    
+    return render(request, './home.html', context)
+
+
+def home_stats_api(request):
+    try:
+        online_users = User.objects.filter(is_online=True).count()
+        total_members = User.objects.filter(is_active=True).count()
+        total_posts = sum(user.total_posts for user in User.objects.all())
+        total_events = 0  
+        active_chats = 0  
+        upcoming_events = 0  
+        active_discussions = 0  
+
+        new_notifications = 0
+        if request.user.is_authenticated:
+            pass
+        
+        return JsonResponse({
+            'online_users': online_users,
+            'total_members': total_members,
+            'total_posts': total_posts,
+            'total_events': total_events,
+            'active_chats': active_chats,
+            'upcoming_events': upcoming_events,
+            'active_discussions': active_discussions,
+            'new_notifications': new_notifications,
+            'success': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'success': False
+        }, status=500)
+
+
+@login_required
+def activity_feed_api(request):
+    try:
+        offset = int(request.GET.get('offset', 0))
+        limit = int(request.GET.get('limit', 10))
+   
+        activities = UserActivity.objects.select_related('user').filter(
+            activity_type__in=['forum_post', 'event_join', 'profile_update', 'login']
+        )[offset:offset + limit]
+        
+        activity_data = []
+        for activity in activities:
+            activity_data.append({
+                'id': str(activity.id),
+                'user': {
+                    'name': activity.user.display_name,
+                    'avatar': activity.user.avatar.url if activity.user.avatar else None,
+                    'id': str(activity.user.id)
+                },
+                'action': activity.get_activity_type_display(),
+                'content': activity.description,
+                'timestamp': activity.timestamp.isoformat(),
+                'likes': 0, 
+                'comments': 0,  
+            })
+        
+        return JsonResponse({
+            'activities': activity_data,
+            'has_more': len(activities) == limit,
+            'success': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'success': False
+        }, status=500)
+
+
+@login_required
+def online_users_api(request):
+    try:
+        recent_threshold = timezone.now() - timedelta(minutes=5)
+        online_users = User.objects.filter(
+            Q(is_online=True) | Q(last_seen__gte=recent_threshold)
+        ).exclude(id=request.user.id)[:20]  
+        
+        users_data = []
+        for user in online_users:
+            users_data.append({
+                'id': str(user.id),
+                'name': user.display_name,
+                'avatar': user.avatar.url if user.avatar else None,
+                'is_online': user.is_online,
+                'last_seen': user.last_seen.isoformat() if user.last_seen else None
+            })
+        
+        return JsonResponse({
+            'users': users_data,
+            'success': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'success': False
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def quick_post_api(request):
+    try:
+        content = request.POST.get('content', '').strip()
+        category = request.POST.get('category', 'general')
+        
+        if not content:
+            return JsonResponse({
+                'error': 'Content is required',
+                'success': False
+            }, status=400)
+        
+        if len(content) > 500:
+            return JsonResponse({
+                'error': 'Content too long (max 500 characters)',
+                'success': False
+            }, status=400)
+        
+        UserActivity.objects.create(
+            user=request.user,
+            activity_type='forum_post',
+            description=f'Posted: {content[:50]}{"..." if len(content) > 50 else ""}',
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        request.user.total_posts += 1
+        request.user.save()
+        
+        return JsonResponse({
+            'message': 'Post created successfully',
+            'success': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'success': False
+        }, status=500)
+
+
+@login_required
+def trending_topics_api(request):
+    try:
+        trending_topics = [
+            {'name': 'Django Tips', 'posts': 45, 'color': 'primary'},
+            {'name': 'Web Development', 'posts': 38, 'color': 'info'},
+            {'name': 'Community Events', 'posts': 29, 'color': 'success'},
+            {'name': 'Tech News', 'posts': 22, 'color': 'warning'},
+            {'name': 'Career Advice', 'posts': 18, 'color': 'danger'},
+        ]
+        
+        return JsonResponse({
+            'topics': trending_topics,
+            'success': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'success': False
+        }, status=500)
+
+
+@login_required
+def user_stats_api(request):
+    try:
+        user = request.user
+      
+        stats = {
+            'posts': user.total_posts,
+            'events_attended': user.total_events_attended,
+            'followers': user.followers.count(),
+            'following': user.following.count(),
+            'reputation': user.reputation_score,
+            'profile_completion': calculate_profile_completion(user),
+        }
+        
+        recent_activities = user.activities.filter(
+            timestamp__gte=timezone.now() - timedelta(days=7)
+        ).count()
+        
+        stats['recent_activity'] = recent_activities
+        
+        return JsonResponse({
+            'stats': stats,
+            'success': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'success': False
+        }, status=500)
+
+def calculate_profile_completion(user):
     fields = ['first_name', 'last_name', 'bio', 'avatar', 'location']
     completed = sum(1 for field in fields if getattr(user, field))
     return int((completed / len(fields)) * 100)
