@@ -19,7 +19,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     
     <!-- Custom CSS -->
-    <link href="{% static 'accounts/css/accounts.css' %}" rel="stylesheet">
+    <link href="{% static 'css/accounts.css' %}" rel="stylesheet">
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -147,20 +147,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-light text-center text-muted py-4 mt-5">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6 text-md-start">
-                    <p class="mb-0">&copy; 2025 Community Platform. All rights reserved.</p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <a href="#" class="text-muted me-3">Privacy Policy</a>
-                    <a href="#" class="text-muted me-3">Terms of Service</a>
-                    <a href="#" class="text-muted">Support</a>
-                </div>
-            </div>
-        </div>
-    </footer>
+
 
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" 
@@ -180,7 +167,9 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Custom JavaScript -->
-    <script src="{% static 'accounts/js/accounts.js' %}"></script>
+    <script src="{% static 'js/utils.js' %}"></script>
+    <script src="{% static 'js/websocket.js' %}"></script>
+    <script src="{% static 'js/accounts.js' %}"></script>
 
     {% block extra_js %}
     <script>
@@ -227,7 +216,7 @@
     {% if user.is_authenticated %}
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('/static/sw.js')
                 .then(registration => console.log('SW registered:', registration))
                 .catch(error => console.log('SW registration failed:', error));
         }
