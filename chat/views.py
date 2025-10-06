@@ -1,168 +1,68 @@
-# chat/views.py
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from django.core.paginator import Paginator
-from django.db.models import Count, Q, Prefetch
-from django.utils import timezone
-from django.views.decorators.http import require_http_methods
 from django.contrib import messages
-from django.views.decorators.csrf import csrf_exempt
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-from datetime import timedelta
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db.models import Q, Count, Max, Prefetch, F
+from django.utils import timezone
+from django.core.paginator import Paginator
+from .models import ChatRoom, Message, RoomMembership, MessageReaction, TypingIndicator
+from accounts.models import User
 import json
-import uuid
 
-from .models import (
-    ChatRoom, Message, RoomMembership, UserActivity, 
-    ChatEvent, RealTimeUtils, TypingIndicator
-)
 
 @login_required
-def room_list(request):
-    """Enhanced room list view with real-time data preparation"""
-    
-    # Update user activity
-    RealTimeUtils.update_user_activity(request.user)
-    
-    # Get user's rooms with optimized queries
-    user_rooms = ChatRoom.objects.for_user(request.user).select_related().prefetch_related(
+def chat_home( request):
+
+    rooms = ChatRoom.objects.filter(
+        members=request.user,
+        is_active=True
+    ).select_related('created_by').prefetch_related(
         'members',
-        Prefetch('messages', queryset=Message.objects.select_related('sender')[:1])
+        Prefetch('messages', queryset=Message.objects.filter(is_deleted=False)[:1])
     ).annotate(
-        member_count=Count('members'),
-        online_members_count=Count(
-            'members',
-            filter=Q(members__activity_tracker__last_activity__gte=timezone.now() - timedelta(minutes=10))
-        )
-    ).order_by('-last_activity')
-    
-    # Get unread counts for each room
-    user_unread_counts = RealTimeUtils.get_user_unread_counts(request.user)
-    
-    # Get room type counts for filters
-    room_type_counts = {
-        'group': user_rooms.filter(room_type='group').count(),
-        'private': user_rooms.filter(room_type='private').count(),
-        'forum': user_rooms.filter(room_type='forum').count(),
-        'event': user_rooms.filter(room_type='event').count(),
-    }
-    
-    # Get online users
-    online_users = RealTimeUtils.get_online_users()
-    
-    # Get recent activities
-    recent_activities = RealTimeUtils.get_recent_activities(limit=15)
-    
-    # Prepare enhanced room data
-    enhanced_rooms = []
-    for room in user_rooms[:50]:  # Limit for performance
-        # Get last message
-        last_message = room.messages.first() if hasattr(room, 'messages') else None
-        
-        # Get other user for private chats
-        other_user = None
-        if room.room_type == 'private':
-            other_user_obj = room.get_other_user(request.user)
-            if other_user_obj:
-                other_user = {
-                    'id': other_user_obj.id,
-                    'username': other_user_obj.username,
-                    'display_name': other_user_obj.get_full_name() or other_user_obj.username,
-                    'is_online': hasattr(other_user_obj, 'activity_tracker') and 
-                               other_user_obj.activity_tracker.is_recently_active,
-                }
-        
-        room_data = {
-            'id': str(room.id),
-            'name': room.name,
-            'room_type': room.room_type,
-            'is_private': room.room_type == 'private',
-            'description': room.description,
-            'member_count': getattr(room, 'member_count', 0),
-            'online_members_count': getattr(room, 'online_members_count', 0),
-            'unread_count': user_unread_counts.get(str(room.id), 0),
-            'has_unread': user_unread_counts.get(str(room.id), 0) > 0,
-            'last_message': {
-                'content': last_message.content if last_message else None,
-                'sender': last_message.sender.username if last_message else None,
-                'created_at': last_message.created_at.isoformat() if last_message else None,
-                'message_type': last_message.message_type if last_message else None,
-            } if last_message else None,
-            'other_user': other_user,
-            'created_at': room.created_at.isoformat(),
-            'last_activity': room.last_activity.isoformat(),
-        }
-        enhanced_rooms.append(room_data)
+        unread_count=Count('messages', filter=Q(
+            messages__created_at__gt=F('memberships__last_read_at'),
+            memberships__user=request.user
+        ))
+    ).order_by('-updated_at')
+  
+    direct_rooms = rooms.filter(room_type='direct')
+    group_rooms = rooms.filter(room_type='group')
+    event_rooms = rooms.filter(room_type='event')
     
     context = {
-        'rooms': user_rooms,
-        'enhanced_rooms': enhanced_rooms,
-        'room_type_counts': room_type_counts,
-        'online_users': online_users[:20],  # Limit for UI
-        'recent_activities': recent_activities,
-        'total_unread': sum(user_unread_counts.values()),
-        'user_activity': getattr(request.user, 'activity_tracker', None),
+        'direct_rooms': direct_rooms,
+        'group_rooms': group_rooms,
+        'event_rooms': event_rooms,
+        'total_unread': sum(r.unread_count for r in rooms),
     }
     
-    return render(request, 'chat/room_list.html', context)
+    return render(request, 'chat/home.html', context)
 
 
 @login_required
 def chat_room(request, room_id):
-    """Enhanced chat room view with real-time preparation"""
-    
-    room = get_object_or_404(ChatRoom, id=room_id)
-    
-    # Check if user has access
-    if request.user not in room.members.all():
-        messages.error(request, "You don't have access to this room.")
-        return redirect('chat:room_list')
-    
-    # Update user activity and current room
-    RealTimeUtils.update_user_activity(request.user, room)
-    
-    # Get messages with pagination
-    messages_queryset = room.messages.select_related('sender').prefetch_related(
-        'reactions__user', 'replies', 'read_by', 'delivered_to'
-    ).order_by('-created_at')
-    
-    paginator = Paginator(messages_queryset, 50)
-    page = request.GET.get('page', 1)
-    messages_page = paginator.get_page(page)
-    
-    # Mark messages as read
-    mark_messages_as_read(request.user, room)
-    
-    # Get room statistics
-    room_stats = {
-        'total_messages': room.message_count,
-        'member_count': room.members.count(),
-        'online_count': RealTimeUtils.get_room_online_count(room),
-        'created_at': room.created_at,
-        'last_activity': room.last_activity,
-    }
-    
-    # Get typing indicators
-    typing_users = TypingIndicator.objects.filter(
-        room=room,
-        started_at__gte=timezone.now() - timedelta(minutes=2)
-    ).exclude(user=request.user).select_related('user')
-    
-    # Get online members for sidebar
-    online_members = room.members.filter(
-        activity_tracker__last_activity__gte=timezone.now() - timedelta(minutes=10)
-    ).select_related('activity_tracker')[:10]  # Limit for UI
+ 
+    room = get_object_or_404(
+        ChatRoom.objects.select_related('created_by').prefetch_related('members'),
+        id=room_id,
+        members=request.user
+    )
+ 
+    membership = RoomMembership.objects.get(room=room, user=request.user)
+    membership.last_read_at = timezone.now()
+    membership.save()
+ 
+    messages_list = room.messages.filter(is_deleted=False).select_related(
+        'sender', 'reply_to__sender'
+    ).prefetch_related('reactions', 'mentions')[:50]
     
     context = {
         'room': room,
-        'messages': messages_page,
-        'room_stats': room_stats,
-        'typing_users': typing_users,
-        'online_members': online_members,
-        'is_room_admin': request.user in room.admins.all(),
-        'other_user': room.get_other_user(request.user) if room.room_type == 'private' else None,
+        'messages': messages_list,
+        'membership': membership,
+        'members': room.members.all(),
     }
     
     return render(request, 'chat/room.html', context)
@@ -170,554 +70,374 @@ def chat_room(request, room_id):
 
 @login_required
 @require_http_methods(["POST"])
+def create_room(request):
+ 
+    room_type = request.POST.get('room_type', 'group')
+    name = request.POST.get('name', '').strip()
+    description = request.POST.get('description', '')
+    member_ids = request.POST.getlist('members[]')
+    
+    if room_type == 'direct' and len(member_ids) != 1:
+        return JsonResponse({'error': 'Direct messages require exactly one other user'}, status=400)
+
+    if room_type == 'direct':
+        other_user = get_object_or_404(User, id=member_ids[0])
+        existing_dm = ChatRoom.objects.filter(
+            room_type='direct',
+            members=request.user
+        ).filter(members=other_user).first()
+        
+        if existing_dm:
+            return JsonResponse({
+                'success': True,
+                'room_id': str(existing_dm.id),
+                'redirect': existing_dm.get_absolute_url()
+            })
+
+    room = ChatRoom.objects.create(
+        name=name,
+        room_type=room_type,
+        description=description,
+        created_by=request.user
+    )
+ 
+    RoomMembership.objects.create(room=room, user=request.user, role='admin')
+
+    for user_id in member_ids:
+        user = get_object_or_404(User, id=user_id)
+        RoomMembership.objects.create(room=room, user=user, role='member')
+    
+    return JsonResponse({
+        'success': True,
+        'room_id': str(room.id),
+        'redirect': room.get_absolute_url()
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
 def send_message(request, room_id):
-    """Enhanced message sending with real-time broadcasting"""
-    
-    room = get_object_or_404(ChatRoom, id=room_id)
-    
-    # Check access
-    if request.user not in room.members.all():
-        return JsonResponse({'error': 'Access denied'}, status=403)
+   
+    room = get_object_or_404(ChatRoom, id=room_id, members=request.user)
     
     content = request.POST.get('content', '').strip()
-    message_type = request.POST.get('message_type', 'text')
-    parent_message_id = request.POST.get('parent_message')
+    reply_to_id = request.POST.get('reply_to')
+    file = request.FILES.get('file')
     
-    if not content and message_type == 'text':
-        return JsonResponse({'error': 'Message content required'}, status=400)
+    if not content and not file:
+        return JsonResponse({'error': 'Message cannot be empty'}, status=400)
+
+    message = Message.objects.create(
+        room=room,
+        sender=request.user,
+        content=content,
+        message_type='image' if file and file.content_type.startswith('image/') else 'file' if file else 'text'
+    )
     
-    # Create message
-    message_data = {
-        'room': room,
-        'sender': request.user,
-        'content': content,
-        'message_type': message_type,
-    }
+    if file:
+        message.file = file
+        message.file_name = file.name
+        message.file_size = file.size
+        message.save()
     
-    # Handle file uploads
-    if 'file' in request.FILES:
-        message_data['file_attachment'] = request.FILES['file']
-        if not content:
-            message_data['content'] = f"Shared a file: {request.FILES['file'].name}"
-            message_data['message_type'] = 'file'
-    
-    # Handle replies
-    if parent_message_id:
+    if reply_to_id:
+        message.reply_to = get_object_or_404(Message, id=reply_to_id, room=room)
+        message.save()
+ 
+    import re
+    mentions = re.findall(r'@(\w+)', content)
+    for username in mentions:
         try:
-            parent = Message.objects.get(id=parent_message_id, room=room)
-            message_data['parent_message'] = parent
-        except Message.DoesNotExist:
+            user = User.objects.get(username=username)
+            if user in room.members.all():
+                message.mentions.add(user)
+        except User.DoesNotExist:
             pass
+  
+    room.updated_at = timezone.now()
+    room.save()
     
-    message = Message.objects.create(**message_data)
-    
-    # Create chat event
-    ChatEvent.objects.create(
-        event_type='message_sent',
-        room=room,
-        user=request.user,
-        message=message,
-        event_data={'content': content[:100]}
-    )
-    
-    # Broadcast to WebSocket consumers
-    broadcast_new_message(room, message, request.user)
-    
-    # Update user activity
-    RealTimeUtils.update_user_activity(request.user, room)
-    
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({
-            'status': 'sent',
-            'message_id': str(message.id),
-            'timestamp': message.created_at.isoformat(),
-            'content': message.content,
-            'sender': request.user.username,
-        })
-    
-    return redirect('chat:room', room_id=room_id)
-
-
-@login_required
-@require_http_methods(["POST"])
-def create_room(request):
-    """Enhanced room creation with real-time broadcasting"""
-    
-    name = request.POST.get('name', '').strip()
-    room_type = request.POST.get('room_type', 'group')
-    description = request.POST.get('description', '').strip()
-    
-    # Validation
-    if not name:
-        return JsonResponse({'error': 'Room name is required'}, status=400)
-    
-    if len(name) > 100:
-        return JsonResponse({'error': 'Room name too long (max 100 characters)'}, status=400)
-    
-    if room_type not in dict(ChatRoom.ROOM_TYPES):
-        return JsonResponse({'error': 'Invalid room type'}, status=400)
-    
-    # Check if room with same name exists for user
-    existing_room = ChatRoom.objects.filter(
-        name__iexact=name,
-        members=request.user,
-        is_active=True
-    ).first()
-    
-    if existing_room:
-        return JsonResponse({'error': 'You already have a room with this name'}, status=400)
-    
-    try:
-        # Create room
-        room = ChatRoom.objects.create(
-            name=name,
-            room_type=room_type,
-            description=description
-        )
-        
-        # Add creator as member and admin
-        room.members.add(request.user)
-        room.admins.add(request.user)
-        
-        # Create membership record
-        RoomMembership.objects.create(
-            room=room, 
-            user=request.user,
-            notification_settings={'mentions': True, 'all_messages': True}
-        )
-        
-        # Create chat event
-        ChatEvent.objects.create(
-            event_type='room_created',
-            room=room,
-            user=request.user,
-            event_data={
-                'name': name, 
-                'type': room_type,
-                'description': description
-            }
-        )
-        
-        # Broadcast room creation to all room list consumers
-        broadcast_room_creation(room, request.user)
-        
-        # Update user activity
-        RealTimeUtils.update_user_activity(request.user, room)
-        
-        response_data = {
-            'status': 'created',
-            'room_id': str(room.id),
-            'room': {
-                'id': str(room.id),
-                'name': room.name,
-                'room_type': room.room_type,
-                'description': room.description,
-                'member_count': 1,
-                'online_members_count': 1,
-                'unread_count': 0,
-                'created_at': room.created_at.isoformat(),
+    return JsonResponse({
+        'success': True,
+        'message_id': str(message.id),
+        'message': {
+            'id': str(message.id),
+            'sender': {
+                'id': str(request.user.id),
+                'name': request.user.display_name,
+                'avatar': request.user.avatar.url if request.user.avatar else None
             },
-            'redirect_url': f'/chat/room/{room.id}/'
+            'content': message.content,
+            'created_at': message.created_at.isoformat(),
+            'message_type': message.message_type,
         }
-        
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse(response_data)
-        
-        messages.success(request, f'Room "{name}" created successfully!')
-        return redirect('chat:room', room_id=room.id)
-        
-    except Exception as e:
-        return JsonResponse({'error': 'Failed to create room. Please try again.'}, status=500)
+    })
+
+
+@login_required
+def get_messages(request, room_id):
+ 
+    room = get_object_or_404(ChatRoom, id=room_id, members=request.user)
+    
+    before_id = request.GET.get('before')
+    limit = int(request.GET.get('limit', 50))
+    
+    messages_query = room.messages.filter(is_deleted=False).select_related(
+        'sender', 'reply_to__sender'
+    ).prefetch_related('reactions__user', 'mentions')
+    
+    if before_id:
+        before_msg = get_object_or_404(Message, id=before_id)
+        messages_query = messages_query.filter(created_at__lt=before_msg.created_at)
+    
+    messages_list = list(messages_query[:limit])
+    
+    messages_data = [{
+        'id': str(msg.id),
+        'sender': {
+            'id': str(msg.sender.id),
+            'name': msg.sender.display_name,
+            'avatar': msg.sender.avatar.url if msg.sender.avatar else None
+        } if msg.sender else None,
+        'content': msg.content,
+        'message_type': msg.message_type,
+        'file_url': msg.file.url if msg.file else None,
+        'file_name': msg.file_name,
+        'reply_to': {
+            'id': str(msg.reply_to.id),
+            'sender': msg.reply_to.sender.display_name if msg.reply_to.sender else 'Unknown',
+            'content': msg.reply_to.content[:50]
+        } if msg.reply_to else None,
+        'reactions': [
+            {'emoji': r.emoji, 'user_id': str(r.user.id), 'user_name': r.user.display_name}
+            for r in msg.reactions.all()
+        ],
+        'is_edited': msg.is_edited,
+        'created_at': msg.created_at.isoformat(),
+    } for msg in messages_list]
+    
+    return JsonResponse({
+        'messages': messages_data,
+        'has_more': len(messages_list) == limit
+    })
 
 
 @login_required
 @require_http_methods(["POST"])
-def join_room(request, room_id):
-    """Enhanced room joining with real-time broadcasting"""
+def edit_message(request, message_id):
+  
+    message = get_object_or_404(Message, id=message_id, sender=request.user)
     
-    room = get_object_or_404(ChatRoom, id=room_id, is_active=True)
+    content = request.POST.get('content', '').strip()
+    if not content:
+        return JsonResponse({'error': 'Content cannot be empty'}, status=400)
     
-    if request.user in room.members.all():
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'status': 'already_member'})
-        return redirect('chat:room', room_id=room.id)
+    message.content = content
+    message.is_edited = True
+    message.save()
     
-    # Add user to room
-    room.members.add(request.user)
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_message(request, message_id):
+
+    message = get_object_or_404(Message, id=message_id, sender=request.user)
     
-    # Create membership record
-    RoomMembership.objects.create(
-        room=room, 
+    message.is_deleted = True
+    message.save()
+    
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def react_to_message(request, message_id):
+
+    message = get_object_or_404(Message, id=message_id, room__members=request.user)
+    
+    emoji = request.POST.get('emoji', '').strip()
+    if not emoji:
+        return JsonResponse({'error': 'Emoji required'}, status=400)
+    
+    reaction, created = MessageReaction.objects.get_or_create(
+        message=message,
         user=request.user,
-        notification_settings={'mentions': True, 'all_messages': False}
+        emoji=emoji
     )
     
-    # Create chat event
-    ChatEvent.objects.create(
-        event_type='user_joined',
-        room=room,
-        user=request.user,
-        event_data={'room_name': room.name}
-    )
+    if not created:
+        reaction.delete()
+        return JsonResponse({'success': True, 'action': 'removed'})
     
-    # Broadcast user joined
-    broadcast_room_member_update(room, request.user, 'joined')
+    return JsonResponse({'success': True, 'action': 'added'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_room(request, room_id):
+ 
+    room = get_object_or_404(ChatRoom, id=room_id)
+    membership = get_object_or_404(RoomMembership, room=room, user=request.user)
     
-    # Update user activity
-    RealTimeUtils.update_user_activity(request.user, room)
+    if membership.role not in ['admin', 'moderator']:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
     
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({
-            'status': 'joined',
-            'room_id': str(room.id),
-            'redirect_url': f'/chat/room/{room.id}/'
-        })
+    name = request.POST.get('name')
+    description = request.POST.get('description')
     
-    messages.success(request, f'You joined "{room.name}"!')
-    return redirect('chat:room', room_id=room.id)
+    if name:
+        room.name = name
+    if description is not None:
+        room.description = description
+    
+    room.save()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def add_members(request, room_id):
+
+    room = get_object_or_404(ChatRoom, id=room_id)
+    membership = get_object_or_404(RoomMembership, room=room, user=request.user)
+    
+    if room.room_type == 'direct':
+        return JsonResponse({'error': 'Cannot add members to direct messages'}, status=400)
+    
+    if membership.role not in ['admin', 'moderator']:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    user_ids = request.POST.getlist('user_ids[]')
+    added = []
+    
+    for user_id in user_ids:
+        user = get_object_or_404(User, id=user_id)
+        _, created = RoomMembership.objects.get_or_create(
+            room=room,
+            user=user,
+            defaults={'role': 'member'}
+        )
+        if created:
+            added.append(user.display_name)
+   
+            Message.objects.create(
+                room=room,
+                message_type='system',
+                content=f"{user.display_name} joined the room"
+            )
+    
+    return JsonResponse({'success': True, 'added': added})
 
 
 @login_required
 @require_http_methods(["POST"])
 def leave_room(request, room_id):
-    """Enhanced room leaving with real-time broadcasting"""
-    
+ 
     room = get_object_or_404(ChatRoom, id=room_id)
+    membership = get_object_or_404(RoomMembership, room=room, user=request.user)
     
-    if request.user not in room.members.all():
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'status': 'not_member'})
-        return redirect('chat:room_list')
+    if room.room_type == 'direct':
+        return JsonResponse({'error': 'Cannot leave direct messages'}, status=400)
     
-    # Check if user is the last admin
-    if (request.user in room.admins.all() and 
-        room.admins.count() == 1 and 
-        room.members.count() > 1):
-        # Transfer admin to another member
-        other_member = room.members.exclude(id=request.user.id).first()
-        if other_member:
-            room.admins.add(other_member)
+    membership.delete()
     
-    # Remove user from room
-    room.members.remove(request.user)
-    room.admins.remove(request.user)  # Also remove from admins if applicable
-    
-    # Delete membership record
-    RoomMembership.objects.filter(room=room, user=request.user).delete()
-    
-    # Remove typing indicators
-    TypingIndicator.objects.filter(room=room, user=request.user).delete()
-    
-    # Create chat event
-    ChatEvent.objects.create(
-        event_type='user_left',
+    Message.objects.create(
         room=room,
-        user=request.user,
-        event_data={'room_name': room.name}
+        message_type='system',
+        content=f"{request.user.display_name} left the room"
     )
     
-    # Broadcast user left
-    broadcast_room_member_update(room, request.user, 'left')
+    return JsonResponse({'success': True})
+
+
+@login_required
+def search_messages(request, room_id):
+
+    room = get_object_or_404(ChatRoom, id=room_id, members=request.user)
+    query = request.GET.get('q', '').strip()
     
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({'status': 'left'})
+    if not query or len(query) < 2:
+        return JsonResponse({'messages': []})
     
-    messages.info(request, f'You left "{room.name}".')
-    return redirect('chat:room_list')
+    messages = room.messages.filter(
+        content__icontains=query,
+        is_deleted=False
+    ).select_related('sender')[:20]
+    
+    results = [{
+        'id': str(msg.id),
+        'content': msg.content,
+        'sender': msg.sender.display_name if msg.sender else 'System',
+        'created_at': msg.created_at.isoformat()
+    } for msg in messages]
+    
+    return JsonResponse({'messages': results})
+
+
+@login_required
+def user_search(request):
+
+    query = request.GET.get('q', '').strip()
+    exclude_room = request.GET.get('exclude_room')
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'users': []})
+    
+    users = User.objects.filter(
+        Q(username__icontains=query) |
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query) |
+        Q(email__icontains=query)
+    ).exclude(id=request.user.id)[:10]
+    
+    if exclude_room:
+        room = get_object_or_404(ChatRoom, id=exclude_room)
+        users = users.exclude(id__in=room.members.values_list('id', flat=True))
+    
+    results = [{
+        'id': str(u.id),
+        'username': u.username,
+        'display_name': u.display_name,
+        'avatar': u.avatar.url if u.avatar else None,
+        'is_online': u.is_online,
+    } for u in users]
+    
+    return JsonResponse({'users': results})
 
 
 @login_required
 @require_http_methods(["POST"])
 def mark_room_read(request, room_id):
-    """Mark all messages in a room as read"""
+
+    room = get_object_or_404(ChatRoom, id=room_id, members=request.user)
+    membership = RoomMembership.objects.get(room=room, user=request.user)
+    membership.last_read_at = timezone.now()
+    membership.save()
     
-    room = get_object_or_404(ChatRoom, id=room_id)
-    
-    if request.user not in room.members.all():
-        return JsonResponse({'error': 'Access denied'}, status=403)
-    
-    marked_count = mark_messages_as_read(request.user, room)
-    
-    # Broadcast read status update
-    broadcast_read_status_update(room, request.user)
-    
-    return JsonResponse({
-        'status': 'success',
-        'marked_count': marked_count,
-        'room_id': str(room_id)
-    })
+    return JsonResponse({'success': True})
 
 
-# Real-time broadcasting functions
-def broadcast_new_message(room, message, sender):
-    """Broadcast new message to WebSocket consumers"""
-    channel_layer = get_channel_layer()
-    
-    # Broadcast to room consumers
-    async_to_sync(channel_layer.group_send)(
-        f'chat_{room.id}',
-        {
-            'type': 'chat_message',
-            'message': message.content,
-            'username': sender.username,
-            'user_id': sender.id,
-            'message_id': str(message.id),
-            'message_type': message.message_type,
-            'timestamp': message.created_at.isoformat(),
-        }
-    )
-    
-    # Broadcast to room list consumers for unread counts and notifications
-    async_to_sync(channel_layer.group_send)(
-        'room_list_updates',
-        {
-            'type': 'new_message',
-            'room_id': str(room.id),
-            'message': {
-                'content': message.content,
-                'sender': sender.username,
-                'created_at': message.created_at.isoformat(),
-                'message_type': message.message_type
-            },
-            'sender': {
-                'id': sender.id,
-                'username': sender.username,
-                'display_name': sender.get_full_name() or sender.username,
-            },
-            'unread_count': room.get_unread_count_for_user,  # Function reference
-            'timestamp': message.created_at.isoformat()
-        }
-    )
-
-
-def broadcast_room_creation(room, creator):
-    """Broadcast new room creation to room list consumers"""
-    channel_layer = get_channel_layer()
-    
-    async_to_sync(channel_layer.group_send)(
-        'room_list_updates',
-        {
-            'type': 'room_created',
-            'room': {
-                'id': str(room.id),
-                'name': room.name,
-                'room_type': room.room_type,
-                'description': room.description,
-                'member_count': 1,
-                'online_members_count': 1,
-                'unread_count': 0,
-                'has_unread': False,
-                'last_message': None,
-                'created_at': room.created_at.isoformat(),
-                'last_activity': room.last_activity.isoformat(),
-            },
-            'creator': {
-                'id': creator.id,
-                'username': creator.username,
-                'display_name': creator.get_full_name() or creator.username,
-            }
-        }
-    )
-
-
-def broadcast_room_member_update(room, user, action):
-    """Broadcast room membership changes"""
-    channel_layer = get_channel_layer()
-    
-    async_to_sync(channel_layer.group_send)(
-        'room_list_updates',
-        {
-            'type': 'room_member_update',
-            'room_id': str(room.id),
-            'member_count': room.members.count(),
-            'online_count': RealTimeUtils.get_room_online_count(room),
-            'action': action,
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'display_name': user.get_full_name() or user.username,
-            }
-        }
-    )
-
-
-def broadcast_read_status_update(room, user):
-    """Broadcast read status update to room list"""
-    channel_layer = get_channel_layer()
-    
-    async_to_sync(channel_layer.group_send)(
-        f'user_{user.id}_room_list',
-        {
-            'type': 'read_status_update',
-            'room_id': str(room.id),
-            'unread_count': room.get_unread_count_for_user(user),
-        }
-    )
-
-
-def mark_messages_as_read(user, room):
-    """Mark all unread messages in a room as read for a user"""
-    unread_messages = room.messages.exclude(read_by=user).exclude(sender=user)
-    count = 0
-    
-    for message in unread_messages:
-        message.read_by.add(user)
-        count += 1
-    
-    # Update membership last read message
-    try:
-        membership = RoomMembership.objects.get(room=room, user=user)
-        latest_message = room.messages.first()
-        if latest_message:
-            membership.last_read_message = latest_message
-            membership.save(update_fields=['last_read_message'])
-    except RoomMembership.DoesNotExist:
-        # Create membership if it doesn't exist
-        membership = RoomMembership.objects.create(room=room, user=user)
-        latest_message = room.messages.first()
-        if latest_message:
-            membership.last_read_message = latest_message
-            membership.save(update_fields=['last_read_message'])
-    
-    return count
-
-
-# API endpoints for enhanced real-time functionality
-@login_required
-def api_room_list(request):
-    """Enhanced API endpoint for room list data"""
-    rooms = ChatRoom.objects.for_user(request.user).select_related().prefetch_related(
-        'members', 'messages__sender'
-    ).annotate(
-        member_count=Count('members')
-    )[:50]  # Limit for performance
-    
-    rooms_data = []
-    user_unread_counts = RealTimeUtils.get_user_unread_counts(request.user)
-    
-    for room in rooms:
-        last_message = room.messages.first() if hasattr(room, 'messages') else None
-        
-        # Get other user for private chats
-        other_user = None
-        if room.room_type == 'private':
-            other_user_obj = room.get_other_user(request.user)
-            if other_user_obj:
-                other_user = {
-                    'id': other_user_obj.id,
-                    'username': other_user_obj.username,
-                    'display_name': other_user_obj.get_full_name() or other_user_obj.username,
-                    'is_online': hasattr(other_user_obj, 'activity_tracker') and 
-                               other_user_obj.activity_tracker.is_recently_active,
-                }
-        
-        rooms_data.append({
-            'id': str(room.id),
-            'name': room.name,
-            'room_type': room.room_type,
-            'is_private': room.room_type == 'private',
-            'description': room.description,
-            'member_count': getattr(room, 'member_count', 0),
-            'online_count': RealTimeUtils.get_room_online_count(room),
-            'unread_count': user_unread_counts.get(str(room.id), 0),
-            'has_unread': user_unread_counts.get(str(room.id), 0) > 0,
-            'last_message': {
-                'content': last_message.content if last_message else None,
-                'sender': last_message.sender.username if last_message else None,
-                'created_at': last_message.created_at.isoformat() if last_message else None,
-                'message_type': last_message.message_type if last_message else None,
-            } if last_message else None,
-            'other_user': other_user,
-            'last_activity': room.last_activity.isoformat(),
-            'created_at': room.created_at.isoformat(),
-        })
-    
-    return JsonResponse({
-        'rooms': rooms_data,
-        'total_count': len(rooms_data),
-        'online_users_count': RealTimeUtils.get_online_users().count(),
-        'total_unread': sum(user_unread_counts.values()),
-    })
-
-
-@login_required 
-def api_create_room(request):
-    """API endpoint for room creation"""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
-    
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    
-    name = data.get('name', '').strip()
-    room_type = data.get('room_type', 'group')
-    description = data.get('description', '').strip()
-    
-    # Use the same create_room logic but return API response
-    # This allows both form and API creation to use the same backend
-    request.POST = request.POST.copy()  # Make mutable
-    request.POST['name'] = name
-    request.POST['room_type'] = room_type
-    request.POST['description'] = description
-    
-    return create_room(request)
-
-
-# Utility views for debugging/admin
-@login_required
-def debug_room_state(request, room_id):
-    """Debug endpoint to check room state (dev/admin only)"""
-    if not request.user.is_staff:
-        return JsonResponse({'error': 'Admin access required'}, status=403)
-    
-    room = get_object_or_404(ChatRoom, id=room_id)
-    
-    debug_info = {
-        'room': {
-            'id': str(room.id),
-            'name': room.name,
-            'member_count': room.members.count(),
-            'message_count': room.message_count,
-            'last_activity': room.last_activity.isoformat(),
-        },
-        'members': [{
-            'id': user.id,
-            'username': user.username,
-            'is_online': hasattr(user, 'activity_tracker') and user.activity_tracker.is_recently_active,
-        } for user in room.members.all()],
-        'recent_messages': [{
-            'id': str(msg.id),
-            'content': msg.content[:50],
-            'sender': msg.sender.username,
-            'created_at': msg.created_at.isoformat(),
-        } for msg in room.messages.all()[:10]],
-        'typing_users': [{
-            'username': t.user.username,
-            'started_at': t.started_at.isoformat(),
-        } for t in TypingIndicator.objects.filter(room=room)],
-    }
-    
-    return JsonResponse(debug_info)
-
-
-# Cleanup endpoint
 @login_required
 @require_http_methods(["POST"])
-def cleanup_chat_data(request):
-    """Cleanup old chat data (admin only)"""
-    if not request.user.is_staff:
-        return JsonResponse({'error': 'Admin access required'}, status=403)
+def toggle_pin_room(request, room_id):
+
+    room = get_object_or_404(ChatRoom, id=room_id, members=request.user)
+    membership = RoomMembership.objects.get(room=room, user=request.user)
+    membership.is_pinned = not membership.is_pinned
+    membership.save()
     
-    try:
-        RealTimeUtils.cleanup_old_data()
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Cleanup completed successfully'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Cleanup failed: {str(e)}'
-        }, status=500)
+    return JsonResponse({'success': True, 'is_pinned': membership.is_pinned})
+
+
+@login_required
+@require_http_methods(["POST"])
+def toggle_mute_room(request, room_id):
+\
+    room = get_object_or_404(ChatRoom, id=room_id, members=request.user)
+    membership = RoomMembership.objects.get(room=room, user=request.user)
+    membership.is_muted = not membership.is_muted
+    membership.save()
+    
+    return JsonResponse({'success': True, 'is_muted': membership.is_muted})
