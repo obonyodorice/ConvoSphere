@@ -1,955 +1,303 @@
 {% extends '../base.html' %}
+{% load static %}
 
-{% block title %}{{ room.name }} - Chat{% endblock %}
+{% block title %}{{ room.display_name }} - Chat{% endblock %}
 
 {% block extra_css %}
 <style>
-    .chat-container {
-        height: calc(100vh - 64px);
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .chat-header {
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-        backdrop-filter: blur(20px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .chat-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 20px;
-        background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.05) 100%);
-    }
-    
-    .chat-messages::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    .chat-messages::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-    }
-    
-    .chat-messages::-webkit-scrollbar-thumb {
-        background: rgba(102, 126, 234, 0.5);
-        border-radius: 4px;
-    }
-    
-    .message-bubble {
-        max-width: 70%;
-        margin-bottom: 16px;
-        animation: messageSlideIn 0.3s ease-out;
-    }
-    
-    @keyframes messageSlideIn {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .message-own {
-        margin-left: auto;
-    }
-    
-    .message-own .message-content {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border-radius: 18px 18px 4px 18px;
-    }
-    
-    .message-other .message-content {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 18px 18px 18px 4px;
-    }
-    
-    .message-content {
-        padding: 12px 16px;
-        backdrop-filter: blur(10px);
-        transition: all 0.3s ease;
-    }
-    
-    .message-bubble:hover .message-content {
-        transform: scale(1.02);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-    }
-    
-    .chat-input-area {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(20px);
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 20px;
-    }
-    
-    .chat-input {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 25px;
-        padding: 12px 50px 12px 20px;
-        color: white;
-        transition: all 0.3s ease;
-        resize: none;
-        overflow: hidden;
-    }
-    
-    .chat-input:focus {
-        outline: none;
-        border-color: rgba(102, 126, 234, 0.5);
-        background: rgba(255, 255, 255, 0.15);
-        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
-    }
-    
-    .chat-input::placeholder {
-        color: rgba(255, 255, 255, 0.6);
-    }
-    
-    .send-button {
-        position: absolute;
-        right: 8px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border: none;
-        color: white;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .send-button:hover {
-        transform: translateY(-50%) scale(1.1);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-    
-    .send-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: translateY(-50%) scale(1);
-    }
-    
-    .typing-indicator {
-        display: flex;
-        align-items: center;
-        padding: 8px 16px;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 20px;
-        margin: 10px 0;
-        animation: fadeInOut 2s infinite;
-    }
-    
-    .typing-dots {
-        display: flex;
-        align-items: center;
-        space-x: 4px;
-        margin-left: 8px;
-    }
-    
-    .typing-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: #667eea;
-        animation: typingAnimation 1.4s infinite ease-in-out;
-    }
-    
-    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-    .typing-dot:nth-child(3) { animation-delay: 0s; }
-    
-    @keyframes typingAnimation {
-        0%, 80%, 100% {
-            transform: scale(0.8);
-            opacity: 0.5;
-        }
-        40% {
-            transform: scale(1.2);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes fadeInOut {
-        0%, 100% { opacity: 0.7; }
-        50% { opacity: 1; }
-    }
-    
-    .online-users {
-        display: flex;
-        align-items: center;
-        space-x: -8px;
-    }
-    
-    .user-avatar {
-        position: relative;
-        transition: all 0.3s ease;
-    }
-    
-    .user-avatar:hover {
-        transform: scale(1.2);
-        z-index: 10;
-    }
-    
-    .status-indicator {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        width: 10px;
-        height: 10px;
-        background: #10b981;
-        border: 2px solid #1f2937;
-        border-radius: 50%;
-        box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-    }
-    
-    .message-timestamp {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.5);
-        margin-top: 4px;
-        text-align: right;
-    }
-    
-    .message-other .message-timestamp {
-        text-align: left;
-    }
-    
-    .message-reactions {
-        display: flex;
-        align-items: center;
-        margin-top: 8px;
-        gap: 4px;
-        flex-wrap: wrap;
-    }
-    
-    .reaction {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 12px;
-        padding: 2px 6px;
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 2px;
-    }
-    
-    .reaction:hover {
-        background: rgba(255, 255, 255, 0.2);
-        transform: scale(1.1);
-    }
-    
-    .file-attachment {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 12px;
-        padding: 12px;
-        margin-top: 8px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        transition: all 0.3s ease;
-    }
-    
-    .file-attachment:hover {
-        background: rgba(255, 255, 255, 0.15);
-        transform: translateY(-2px);
-    }
-    
-    .attachment-icon {
-        width: 40px;
-        height: 40px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-    }
-    
-    .message-actions {
-        position: absolute;
-        top: -15px;
-        right: 10px;
-        background: rgba(0, 0, 0, 0.8);
-        border-radius: 20px;
-        padding: 4px;
-        display: flex;
-        gap: 4px;
-        opacity: 0;
-        transform: translateY(10px);
-        transition: all 0.3s ease;
-        pointer-events: none;
-    }
-    
-    .message-bubble:hover .message-actions {
-        opacity: 1;
-        transform: translateY(0);
-        pointer-events: all;
-    }
-    
-    .action-btn {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: transparent;
-        border: none;
-        color: white;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .action-btn:hover {
-        background: rgba(255, 255, 255, 0.2);
-        transform: scale(1.1);
-    }
+.chat-container {
+    height: calc(100vh - 100px);
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+    background: white;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f8f9fa;
+}
+
+.message-group {
+    margin-bottom: 20px;
+}
+
+.message-item {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.message-item.own-message {
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin: 0 10px;
+}
+
+.message-content {
+    max-width: 60%;
+    padding: 10px 15px;
+    border-radius: 18px;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.own-message .message-content {
+    background: #0d6efd;
+    color: white;
+}
+
+.message-sender {
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.message-text {
+    word-wrap: break-word;
+}
+
+.message-time {
+    font-size: 11px;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.own-message .message-time {
+    color: rgba(255,255,255,0.8);
+}
+
+.message-reactions {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.reaction-bubble {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.reaction-bubble:hover {
+    background: #f8f9fa;
+}
+
+.chat-input-area {
+    padding: 15px 20px;
+    border-top: 1px solid #dee2e6;
+    background: white;
+}
+
+.typing-indicator {
+    padding: 10px 20px;
+    font-size: 13px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.reply-preview {
+    background: #e9ecef;
+    padding: 8px 12px;
+    border-left: 3px solid #0d6efd;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+
+.system-message {
+    text-align: center;
+    color: #6c757d;
+    font-size: 13px;
+    margin: 10px 0;
+}
+
+.emoji-picker {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: none;
+}
+
+.emoji-picker.show {
+    display: block;
+}
+
+.emoji-option {
+    font-size: 24px;
+    cursor: pointer;
+    padding: 5px;
+    display: inline-block;
+}
+
+.emoji-option:hover {
+    background: #f8f9fa;
+    border-radius: 4px;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="chat-container bg-gray-900">
+<div class="chat-container">
     <!-- Chat Header -->
-    <div class="chat-header px-6 py-4">
-        <div class="flex items-center justify-between">
-            <!-- Room Info -->
-            <div class="flex items-center space-x-4">
-                <a href="{% url 'chat:room_list' %}" class="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200 lg:hidden">
+    <div class="chat-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <a href="{% url 'chat:home' %}" class="btn btn-link text-dark me-2">
                     <i class="fas fa-arrow-left"></i>
                 </a>
-                
-                <div class="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-white font-semibold">
-                    {% if room.room_type == 'private' %}
-                        <i class="fas fa-user"></i>
-                    {% elif room.room_type == 'group' %}
-                        <i class="fas fa-users"></i>
-                    {% elif room.room_type == 'forum' %}
-                        <i class="fas fa-comments"></i>
-                    {% elif room.room_type == 'event' %}
-                        <i class="fas fa-calendar"></i>
-                    {% endif %}
-                </div>
-                
+                <img src="{{ room.avatar.url|default:'/static/img/default-avatar.png' }}" 
+                     class="message-avatar me-3" alt="">
                 <div>
-                    <h1 class="text-xl font-semibold text-white">{{ room.name }}</h1>
-                    <div class="flex items-center space-x-2 text-sm text-white/60">
-                        <span class="capitalize">{{ room.get_room_type_display }}</span>
-                        <span>•</span>
-                        <span>{{ room.members.count }} members</span>
-                        <span>•</span>
-                        <span class="text-green-400">
-                            <i class="fas fa-circle text-xs mr-1"></i>
-                            12 online
-                        </span>
-                    </div>
+                    <h5 class="mb-0">{{ room.display_name }}</h5>
+                    <small class="text-muted" id="room-status">
+                        {% if room.room_type == 'direct' %}
+                        Online
+                        {% else %}
+                        {{ room.members.count }} members
+                        {% endif %}
+                    </small>
                 </div>
             </div>
             
-            <!-- Online Users & Actions -->
-            <div class="flex items-center space-x-4">
-                <!-- Online Users Preview -->
-                <div class="online-users hidden md:flex">
-                    <div class="user-avatar">
-                        <div class="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-700">
-                            <img src="https://ui-avatars.com/api/?name=John Doe&background=667eea&color=fff&size=32" alt="John" class="w-full h-full object-cover">
-                        </div>
-                        <div class="status-indicator"></div>
-                    </div>
-                    <div class="user-avatar -ml-2">
-                        <div class="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-700">
-                            <img src="https://ui-avatars.com/api/?name=Sarah Wilson&background=10b981&color=fff&size=32" alt="Sarah" class="w-full h-full object-cover">
-                        </div>
-                        <div class="status-indicator"></div>
-                    </div>
-                    <div class="user-avatar -ml-2">
-                        <div class="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-700">
-                            <img src="https://ui-avatars.com/api/?name=Mike Johnson&background=f59e0b&color=fff&size=32" alt="Mike" class="w-full h-full object-cover">
-                        </div>
-                        <div class="status-indicator"></div>
-                    </div>
-                    <div class="user-avatar -ml-2">
-                        <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs border-2 border-gray-700">
-                            +9
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Action Buttons -->
-                <div class="flex items-center space-x-2">
-                    <button class="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200" title="Room Settings">
-                        <i class="fas fa-cog"></i>
-                    </button>
-                    <button class="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200" title="Search Messages">
-                        <i class="fas fa-search"></i>
-                    </button>
-                    <button class="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200" title="Video Call">
-                        <i class="fas fa-video"></i>
-                    </button>
-                </div>
+            <div class="dropdown">
+                <button class="btn btn-link text-dark" data-bs-toggle="dropdown">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" data-action="search"><i class="fas fa-search me-2"></i>Search</a></li>
+                    <li><a class="dropdown-item" href="#" data-action="members"><i class="fas fa-users me-2"></i>Members</a></li>
+                    <li><a class="dropdown-item" href="#" data-action="mute"><i class="fas fa-bell-slash me-2"></i>Mute</a></li>
+                    {% if membership.role in 'admin,moderator' %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" data-action="settings"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
     </div>
     
     <!-- Messages Area -->
-    <div class="chat-messages" id="messagesContainer">
-        {% for message in messages %}
-            <div class="message-bubble {% if message.sender == user %}message-own{% else %}message-other{% endif %}" data-message-id="{{ message.id }}">
-                {% if message.sender != user %}
-                    <div class="flex items-start space-x-3">
-                        <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                            {% if message.sender.avatar %}
-                                <img src="{{ message.sender.avatar.url }}" alt="{{ message.sender.username }}" class="w-full h-full object-cover">
-                            {% else %}
-                                <img src="https://ui-avatars.com/api/?name={{ message.sender.username }}&background=667eea&color=fff&size=40" alt="{{ message.sender.username }}" class="w-full h-full object-cover">
-                            {% endif %}
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-2 mb-1">
-                                <span class="font-medium text-white text-sm">{{ message.sender.username }}</span>
-                                <span class="text-xs text-white/50">{{ message.created_at|date:"H:i" }}</span>
-                            </div>
-                            <div class="message-content">
-                                <p class="text-white">{{ message.content }}</p>
-                                {% if message.file_attachment %}
-                                    <div class="file-attachment">
-                                        <div class="attachment-icon">
-                                            <i class="fas fa-file"></i>
-                                        </div>
-                                        <div>
-                                            <p class="text-white font-medium">{{ message.file_attachment.name }}</p>
-                                            <p class="text-white/60 text-sm">Click to download</p>
-                                        </div>
-                                    </div>
-                                {% endif %}
-                                <div class="message-reactions">
-                                    <div class="reaction">
-                                        <span>👍</span>
-                                        <span class="text-white/80">3</span>
-                                    </div>
-                                    <div class="reaction">
-                                        <span>❤️</span>
-                                        <span class="text-white/80">1</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    <div class="chat-messages" id="chat-messages">
+        {% for message in messages reversed %}
+        {% if message.message_type == 'system' %}
+        <div class="system-message">{{ message.content }}</div>
+        {% else %}
+        <div class="message-item {% if message.sender == user %}own-message{% endif %}" data-message-id="{{ message.id }}">
+            {% if message.sender != user %}
+            <img src="{{ message.sender.avatar.url|default:'/static/img/default-avatar.png' }}" 
+                 class="message-avatar" alt="{{ message.sender.display_name }}">
+            {% endif %}
+            
+            <div>
+                {% if message.reply_to %}
+                <div class="reply-preview">
+                    <small><strong>{{ message.reply_to.sender.display_name }}</strong></small><br>
+                    <small>{{ message.reply_to.content|truncatewords:10 }}</small>
+                </div>
+                {% endif %}
+                
+                <div class="message-content">
+                    {% if message.sender != user %}
+                    <div class="message-sender">{{ message.sender.display_name }}</div>
+                    {% endif %}
+                    <div class="message-text">{{ message.content }}</div>
+                    <div class="message-time">
+                        {{ message.created_at|date:"H:i" }}
+                        {% if message.is_edited %}<i class="fas fa-edit ms-1"></i>{% endif %}
                     </div>
-                {% else %}
-                    <div class="message-content relative">
-                        <p class="text-white">{{ message.content }}</p>
-                        {% if message.file_attachment %}
-                            <div class="file-attachment">
-                                <div class="attachment-icon">
-                                    <i class="fas fa-file"></i>
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">{{ message.file_attachment.name }}</p>
-                                    <p class="text-white/60 text-sm">Click to download</p>
-                                </div>
-                            </div>
-                        {% endif %}
-                        <div class="message-timestamp">
-                            {{ message.created_at|date:"H:i" }}
-                            <i class="fas fa-check text-green-400 ml-1"></i>
-                        </div>
-                        <div class="message-actions">
-                            <button class="action-btn" title="Add Reaction">
-                                <i class="fas fa-smile"></i>
-                            </button>
-                            <button class="action-btn" title="Reply">
-                                <i class="fas fa-reply"></i>
-                            </button>
-                            <button class="action-btn" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        </div>
-                    </div>
+                </div>
+                
+                {% if message.reactions.all %}
+                <div class="message-reactions">
+                    {% for reaction in message.reactions.all %}
+                    <span class="reaction-bubble" data-emoji="{{ reaction.emoji }}">
+                        {{ reaction.emoji }} {{ reaction.count }}
+                    </span>
+                    {% endfor %}
+                </div>
                 {% endif %}
             </div>
-        {% empty %}
-            <!-- Welcome Message -->
-            <div class="text-center py-12">
-                <div class="w-20 h-20 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i class="fas fa-comment-dots text-white text-2xl"></i>
-                </div>
-                <h3 class="text-2xl font-bold text-white mb-4">Welcome to {{ room.name }}!</h3>
-                <p class="text-white/70 text-lg mb-6">This is the beginning of your conversation in this room.</p>
-                <p class="text-white/50">Send your first message to get the conversation started.</p>
-            </div>
-        {% endfor %}
-        
-        <!-- Sample messages for demonstration -->
-        {% if not messages %}
-            <div class="message-bubble message-other" data-message-id="demo1">
-                <div class="flex items-start space-x-3">
-                    <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                        <img src="https://ui-avatars.com/api/?name=Alice Smith&background=10b981&color=fff&size=40" alt="Alice" class="w-full h-full object-cover">
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex items-center space-x-2 mb-1">
-                            <span class="font-medium text-white text-sm">Alice Smith</span>
-                            <span class="text-xs text-white/50">2:34 PM</span>
-                        </div>
-                        <div class="message-content">
-                            <p class="text-white">Hey everyone! Welcome to the {{ room.name }} chat room. Feel free to introduce yourselves and start discussing!</p>
-                            <div class="message-reactions">
-                                <div class="reaction">
-                                    <span>👋</span>
-                                    <span class="text-white/80">5</span>
-                                </div>
-                                <div class="reaction">
-                                    <span>🎉</span>
-                                    <span class="text-white/80">2</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="message-bubble message-other" data-message-id="demo2">
-                <div class="flex items-start space-x-3">
-                    <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                        <img src="https://ui-avatars.com/api/?name=Bob Chen&background=f59e0b&color=fff&size=40" alt="Bob" class="w-full h-full object-cover">
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex items-center space-x-2 mb-1">
-                            <span class="font-medium text-white text-sm">Bob Chen</span>
-                            <span class="text-xs text-white/50">2:35 PM</span>
-                        </div>
-                        <div class="message-content">
-                            <p class="text-white">Thanks Alice! I'm excited to be here. Looking forward to great discussions with everyone. 🚀</p>
-                            <div class="message-reactions">
-                                <div class="reaction">
-                                    <span>🚀</span>
-                                    <span class="text-white/80">3</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        {% endif %}
-        
-        <!-- Typing Indicator -->
-        <div class="typing-indicator hidden" id="typingIndicator">
-            <div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-                <img src="https://ui-avatars.com/api/?name=Someone&background=8b5cf6&color=fff&size=32" alt="User" class="w-full h-full object-cover">
-            </div>
-            <span class="text-white/80 text-sm">Someone is typing</span>
-            <div class="typing-dots">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
         </div>
+        {% endif %}
+        {% endfor %}
     </div>
     
-    <!-- Chat Input Area -->
+    <!-- Typing Indicator -->
+    <div class="typing-indicator" id="typing-indicator" style="display: none;">
+        <span id="typing-users"></span> is typing...
+    </div>
+    
+    <!-- Chat Input -->
     <div class="chat-input-area">
-        <form method="post" action="{% url 'chat:send_message' room.id %}" id="messageForm" class="relative">
-            {% csrf_token %}
-            <div class="flex items-end space-x-4">
-                <!-- File Upload Button -->
-                <button type="button" class="p-3 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 flex-shrink-0" title="Attach File">
-                    <i class="fas fa-paperclip text-lg"></i>
-                </button>
-                
-                <!-- Message Input -->
-                <div class="flex-1 relative">
-                    <textarea 
-                        name="content" 
-                        id="messageInput" 
-                        class="chat-input w-full" 
-                        placeholder="Type your message..." 
-                        rows="1"
-                        maxlength="1000"
-                        required></textarea>
-                    
-                    <!-- Send Button -->
-                    <button type="submit" class="send-button" id="sendButton" disabled>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                    
-                    <!-- Emoji Button -->
-                    <button type="button" class="absolute right-14 top-1/2 transform -translate-y-1/2 p-2 text-white/80 hover:text-white transition-colors" title="Add Emoji">
-                        <i class="fas fa-smile"></i>
-                    </button>
+        <div id="reply-preview" style="display: none;" class="reply-preview mb-2">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <small><strong id="reply-to-name"></strong></small><br>
+                    <small id="reply-to-text"></small>
                 </div>
-                
-                <!-- Voice Message Button -->
-                <button type="button" class="p-3 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 flex-shrink-0" title="Voice Message">
-                    <i class="fas fa-microphone text-lg"></i>
+                <button type="button" class="btn-close btn-sm" id="cancel-reply"></button>
+            </div>
+        </div>
+        
+        <form id="message-form" class="d-flex align-items-center">
+            {% csrf_token %}
+            <input type="hidden" id="reply-to-id">
+            
+            <div class="position-relative me-2">
+                <button type="button" class="btn btn-link text-dark" id="emoji-btn">
+                    <i class="fas fa-smile"></i>
                 </button>
+                <div class="emoji-picker" id="emoji-picker">
+                    <span class="emoji-option">😊</span>
+                    <span class="emoji-option">😂</span>
+                    <span class="emoji-option">❤️</span>
+                    <span class="emoji-option">👍</span>
+                    <span class="emoji-option">👎</span>
+                    <span class="emoji-option">🎉</span>
+                    <span class="emoji-option">🔥</span>
+                    <span class="emoji-option">✨</span>
+                </div>
             </div>
             
-            <!-- Character Counter -->
-            <div class="text-right mt-2">
-                <span class="text-white/50 text-xs" id="charCounter">0/1000</span>
-            </div>
+            <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx">
+            <button type="button" class="btn btn-link text-dark me-2" id="file-btn">
+                <i class="fas fa-paperclip"></i>
+            </button>
+            
+            <input type="text" class="form-control me-2" id="message-input" 
+                   placeholder="Type a message..." autocomplete="off">
+            
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i>
+            </button>
         </form>
     </div>
 </div>
-
-<!-- Hidden file input -->
-<input type="file" id="fileInput" class="hidden" accept="*/*" multiple>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    const roomId = "{{ room.id }}";
-    const currentUser = "{{ user.username }}";
-    const messagesContainer = document.getElementById('messagesContainer');
-    const messageForm = document.getElementById('messageForm');
-    const messageInput = document.getElementById('messageInput');
-    const sendButton = document.getElementById('sendButton');
-    const charCounter = document.getElementById('charCounter');
-    const typingIndicator = document.getElementById('typingIndicator');
-    
-    let typingTimer;
-    let isTyping = false;
-    let chatSocket;
-    
-    // Initialize WebSocket connection
-    function initWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/chat/${roomId}/`;
-        
-        chatSocket = new WebSocket(wsUrl);
-        
-        chatSocket.onopen = function(e) {
-            console.log('WebSocket connected');
-        };
-        
-        chatSocket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            handleWebSocketMessage(data);
-        };
-        
-        chatSocket.onclose = function(e) {
-            console.log('WebSocket disconnected');
-            // Attempt to reconnect after 3 seconds
-            setTimeout(initWebSocket, 3000);
-        };
-        
-        chatSocket.onerror = function(e) {
-            console.error('WebSocket error:', e);
-        };
-    }
-    
-    // Handle incoming WebSocket messages
-    function handleWebSocketMessage(data) {
-        if (data.type === 'chat_message') {
-            addNewMessage(data);
-        } else if (data.type === 'typing_indicator') {
-            handleTypingIndicator(data);
-        }
-    }
-    
-    // Add new message to chat
-    function addNewMessage(data) {
-        const messageHtml = createMessageHTML(data);
-        messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
-        scrollToBottom();
-        
-        // Add animation to new message
-        const newMessage = messagesContainer.lastElementChild;
-        newMessage.style.opacity = '0';
-        newMessage.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            newMessage.style.transition = 'all 0.3s ease';
-            newMessage.style.opacity = '1';
-            newMessage.style.transform = 'translateY(0)';
-        }, 10);
-    }
-    
-    // Create message HTML
-    function createMessageHTML(data) {
-        const isOwnMessage = data.username === currentUser;
-        const messageClass = isOwnMessage ? 'message-own' : 'message-other';
-        
-        if (isOwnMessage) {
-            return `
-                <div class="message-bubble ${messageClass}" data-message-id="${data.message_id || Date.now()}">
-                    <div class="message-content relative">
-                        <p class="text-white">${escapeHtml(data.message)}</p>
-                        <div class="message-timestamp">
-                            ${new Date(data.timestamp).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}
-                            <i class="fas fa-check text-green-400 ml-1"></i>
-                        </div>
-                        <div class="message-actions">
-                            <button class="action-btn" title="Add Reaction">
-                                <i class="fas fa-smile"></i>
-                            </button>
-                            <button class="action-btn" title="Reply">
-                                <i class="fas fa-reply"></i>
-                            </button>
-                            <button class="action-btn" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else {
-            return `
-                <div class="message-bubble ${messageClass}" data-message-id="${data.message_id || Date.now()}">
-                    <div class="flex items-start space-x-3">
-                        <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(data.username)}&background=667eea&color=fff&size=40" alt="${escapeHtml(data.username)}" class="w-full h-full object-cover">
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-2 mb-1">
-                                <span class="font-medium text-white text-sm">${escapeHtml(data.username)}</span>
-                                <span class="text-xs text-white/50">${new Date(data.timestamp).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</span>
-                            </div>
-                            <div class="message-content">
-                                <p class="text-white">${escapeHtml(data.message)}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
-    // Handle typing indicators
-    function handleTypingIndicator(data) {
-        if (data.username !== currentUser) {
-            if (data.is_typing) {
-                typingIndicator.querySelector('span').textContent = `${data.username} is typing`;
-                typingIndicator.classList.remove('hidden');
-                scrollToBottom();
-            } else {
-                typingIndicator.classList.add('hidden');
-            }
-        }
-    }
-    
-    // Send typing indicator
-    function sendTypingIndicator(typing) {
-        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-            chatSocket.send(JSON.stringify({
-                'type': 'typing_indicator',
-                'is_typing': typing
-            }));
-        }
-    }
-    
-    // Form submission
-    messageForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const message = messageInput.value.trim();
-        if (!message) return;
-        
-        // Send via WebSocket if available, otherwise fallback to HTTP
-        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-            chatSocket.send(JSON.stringify({
-                'type': 'chat_message',
-                'message': message,
-                'timestamp': new Date().toISOString()
-            }));
-            
-            messageInput.value = '';
-            updateSendButton();
-            updateCharCounter();
-            sendTypingIndicator(false);
-        } else {
-            // Fallback to regular form submission
-            const formData = new FormData(messageForm);
-            
-            fetch(messageForm.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'sent') {
-                    messageInput.value = '';
-                    updateSendButton();
-                    updateCharCounter();
-                    // Refresh messages or add the new message
-                    location.reload();
-                }
-            })
-            .catch(error => {
-                console.error('Error sending message:', error);
-            });
-        }
-    });
-    
-    // Input handlers
-    messageInput.addEventListener('input', function() {
-        updateSendButton();
-        updateCharCounter();
-        autoResizeTextarea();
-        
-        // Handle typing indicator
-        if (!isTyping) {
-            isTyping = true;
-            sendTypingIndicator(true);
-        }
-        
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => {
-            isTyping = false;
-            sendTypingIndicator(false);
-        }, 1000);
-    });
-    
-    // Keyboard shortcuts
-    messageInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            messageForm.dispatchEvent(new Event('submit'));
-        }
-    });
-    
-    // Update send button state
-    function updateSendButton() {
-        const hasContent = messageInput.value.trim().length > 0;
-        sendButton.disabled = !hasContent;
-        
-        if (hasContent) {
-            sendButton.style.opacity = '1';
-            sendButton.style.transform = 'translateY(-50%) scale(1)';
-        } else {
-            sendButton.style.opacity = '0.5';
-        }
-    }
-    
-    // Update character counter
-    function updateCharCounter() {
-        const length = messageInput.value.length;
-        charCounter.textContent = `${length}/1000`;
-        
-        if (length > 900) {
-            charCounter.classList.add('text-yellow-400');
-            charCounter.classList.remove('text-white/50');
-        } else if (length > 950) {
-            charCounter.classList.add('text-red-400');
-            charCounter.classList.remove('text-yellow-400');
-        } else {
-            charCounter.classList.remove('text-yellow-400', 'text-red-400');
-            charCounter.classList.add('text-white/50');
-        }
-    }
-    
-    // Auto-resize textarea
-    function autoResizeTextarea() {
-        messageInput.style.height = 'auto';
-        const newHeight = Math.min(messageInput.scrollHeight, 120);
-        messageInput.style.height = newHeight + 'px';
-    }
-    
-    // Scroll to bottom
-    function scrollToBottom() {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-    
-    // Utility function to escape HTML
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // File upload handler
-    document.querySelector('button[title="Attach File"]').addEventListener('click', function() {
-        document.getElementById('fileInput').click();
-    });
-    
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-        const files = e.target.files;
-        if (files.length > 0) {
-            // Handle file upload
-            console.log('Files selected:', files);
-            // Implement file upload functionality
-        }
-    });
-    
-    // Message reactions
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.reaction')) {
-            const reaction = e.target.closest('.reaction');
-            const emoji = reaction.querySelector('span:first-child').textContent;
-            const count = parseInt(reaction.querySelector('span:last-child').textContent);
-            
-            // Toggle reaction
-            reaction.querySelector('span:last-child').textContent = count + 1;
-            reaction.style.background = 'rgba(102, 126, 234, 0.3)';
-            
-            setTimeout(() => {
-                reaction.style.background = 'rgba(255, 255, 255, 0.1)';
-            }, 200);
-        }
-    });
-    
-    // Message actions
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.action-btn')) {
-            const button = e.target.closest('.action-btn');
-            const action = button.title;
-            
-            button.style.transform = 'scale(0.9)';
-            setTimeout(() => {
-                button.style.transform = 'scale(1)';
-            }, 150);
-            
-            if (action === 'Add Reaction') {
-                // Open emoji picker
-                console.log('Add reaction clicked');
-            } else if (action === 'Reply') {
-                // Focus input and add reply context
-                messageInput.focus();
-                console.log('Reply clicked');
-            } else if (action === 'Edit') {
-                // Enable message editing
-                console.log('Edit clicked');
-            }
-        }
-    });
-    
-    // Initialize WebSocket connection
-    initWebSocket();
-    
-    // Scroll to bottom on page load
-    setTimeout(scrollToBottom, 100);
-    
-    // Update send button state on load
-    updateSendButton();
-    updateCharCounter();
-    
-    // Handle page visibility change
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-            // User switched tabs/minimized
-            sendTypingIndicator(false);
-        }
-    });
-    
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', function() {
-        if (chatSocket) {
-            chatSocket.close();
-        }
-        sendTypingIndicator(false);
-    });
+const roomId = '{{ room.id }}';
+const userId = '{{ user.id }}';
+const userName = '{{ user.display_name }}';
 </script>
+<script src="{% static 'js/chat-room.js' %}"></script>
 {% endblock %}
