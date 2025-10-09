@@ -5,270 +5,309 @@
 
 {% block extra_css %}
 <style>
-/* Home-specific styles */
-.hero-section {
+/* Hero Section */
+.hero {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 4rem 0;
+    padding: 80px 0;
     position: relative;
     overflow: hidden;
 }
 
-.hero-section::before {
+.hero::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='7' cy='7' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
-    animation: float 20s ease-in-out infinite;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+    background-size: 50px 50px;
+    animation: float 20s linear infinite;
 }
 
 @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
+    from { transform: translate(0, 0); }
+    to { transform: translate(-50px, -50px); }
 }
 
-.feature-card {
-    transition: all 0.3s ease;
-    border: none;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    height: 100%;
+.stats-card {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 15px;
+    padding: 20px;
+    transition: transform 0.3s;
 }
 
-.feature-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+.stats-card:hover {
+    transform: translateY(-5px);
+    background: rgba(255,255,255,0.15);
 }
 
-.stats-counter {
-    font-size: 3rem;
+.counter {
+    font-size: 2.5rem;
     font-weight: bold;
-    color: #667eea;
 }
 
-.activity-item {
-    border-left: 4px solid #667eea;
-    background: #f8f9fa;
-    transition: all 0.3s ease;
+/* Feature Cards */
+.feature-card {
+    position: relative;
+    overflow: hidden;
+    border: none;
+    border-radius: 15px;
+    transition: all 0.3s;
 }
 
-.activity-item:hover {
-    background: #e9ecef;
-    transform: translateX(5px);
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+    transform: rotate(45deg);
+    animation: shine 3s infinite;
 }
 
-.online-users-list {
-    max-height: 300px;
+@keyframes shine {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+.feature-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 15px;
+}
+
+/* Live Feed */
+.live-feed {
+    max-height: 500px;
     overflow-y: auto;
 }
 
-.user-avatar-small {
-    width: 40px;
-    height: 40px;
-    object-fit: cover;
+.feed-item {
+    border-left: 3px solid;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 0 10px 10px 0;
+    background: white;
+    transition: all 0.3s;
+    animation: slideIn 0.5s ease;
 }
 
-.typing-indicator {
-    display: none;
-    color: #6c757d;
-    font-style: italic;
+@keyframes slideIn {
+    from { transform: translateX(-20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
 }
 
-.notification-badge {
-    animation: pulse 2s infinite;
+.feed-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+.feed-item.chat { border-left-color: #0d6efd; }
+.feed-item.event { border-left-color: #198754; }
+.feed-item.forum { border-left-color: #ffc107; }
+.feed-item.user { border-left-color: #dc3545; }
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #28a745;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse-animation 2s infinite;
+    margin-right: 5px;
 }
 
-.quick-action-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin: 2rem 0;
+@keyframes pulse-animation {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
 }
 
-.quick-action-card {
-    background: linear-gradient(45deg, #f8f9fa, #e9ecef);
-    border: 2px dashed #dee2e6;
-    border-radius: 10px;
-    padding: 2rem;
-    text-align: center;
-    text-decoration: none;
-    color: #495057;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.quick-action-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    transition: left 0.5s;
-}
-
-.quick-action-card:hover::before {
-    left: 100%;
-}
-
-.quick-action-card:hover {
-    border-color: #667eea;
-    color: #667eea;
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.2);
-}
-
-.trending-topics {
+/* Trending Section */
+.trending-tag {
     background: linear-gradient(135deg, #667eea, #764ba2);
     color: white;
-    border-radius: 10px;
-    padding: 1.5rem;
-}
-
-.topic-tag {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    padding: 0.5rem 1rem;
+    padding: 8px 16px;
     border-radius: 20px;
     text-decoration: none;
     display: inline-block;
-    margin: 0.25rem;
-    transition: all 0.3s ease;
+    margin: 5px;
+    transition: all 0.3s;
 }
 
-.topic-tag:hover {
-    background: rgba(255, 255, 255, 0.3);
-    color: white;
+.trending-tag:hover {
     transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+
+/* Online Users */
+.user-card {
+    background: white;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.user-card:hover {
+    background: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.user-avatar-sm {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* Quick Actions */
+.quick-action {
+    background: white;
+    border: 2px dashed #dee2e6;
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.quick-action:hover {
+    border-color: #667eea;
+    border-style: solid;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+}
+
+.quick-action i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    color: #667eea;
 }
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- Hero Section -->
-<section class="hero-section">
+<section class="hero">
     <div class="container">
         <div class="row align-items-center">
-            <div class="col-lg-8">
-                <h1 class="display-4 fw-bold mb-4">Welcome to Our Community Platform</h1>
-                <p class="lead mb-4">Connect, collaborate, and grow with like-minded individuals. Join discussions, attend events, and be part of something amazing.</p>
-                
-                <!-- Real-time stats -->
-                <div class="row text-center">
-                    <div class="col-md-3 col-6 mb-3">
-                        <div class="stats-counter" id="online-count">0</div>
-                        <div>Online Now</div>
+            <div class="col-lg-6">
+                <h1 class="display-3 fw-bold mb-4">Welcome to Your Community Hub</h1>
+                <p class="lead mb-4">Connect with like-minded individuals, join discussions, attend events, and grow together in our vibrant community platform.</p>
+                {% if not user.is_authenticated %}
+                <div class="d-flex gap-3">
+                    <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-lg">
+                        <i class="fas fa-rocket me-2"></i> Get Started
+                    </a>
+                    <a href="{% url 'accounts:login' %}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-sign-in-alt me-2"></i> Sign In
+                    </a>
+                </div>
+                {% else %}
+                <a href="{% url 'accounts:dashboard' %}" class="btn btn-light btn-lg">
+                    <i class="fas fa-tachometer-alt me-2"></i> Go to Dashboard
+                </a>
+                {% endif %}
+            </div>
+            <div class="col-lg-6">
+                <div class="row g-3 mt-4 mt-lg-0">
+                    <div class="col-6">
+                        <div class="stats-card">
+                            <div class="counter" id="live-users">0</div>
+                            <div>Online Now</div>
+                        </div>
                     </div>
-                    <div class="col-md-3 col-6 mb-3">
-                        <div class="stats-counter" id="total-members">0</div>
-                        <div>Members</div>
+                    <div class="col-6">
+                        <div class="stats-card">
+                            <div class="counter" id="total-members">0</div>
+                            <div>Members</div>
+                        </div>
                     </div>
-                    <div class="col-md-3 col-6 mb-3">
-                        <div class="stats-counter" id="total-posts">0</div>
-                        <div>Posts</div>
+                    <div class="col-6">
+                        <div class="stats-card">
+                            <div class="counter" id="active-chats">0</div>
+                            <div>Active Chats</div>
+                        </div>
                     </div>
-                    <div class="col-md-3 col-6 mb-3">
-                        <div class="stats-counter" id="total-events">0</div>
-                        <div>Events</div>
+                    <div class="col-6">
+                        <div class="stats-card">
+                            <div class="counter" id="total-events">0</div>
+                            <div>Events</div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-lg-4 text-center">
-                {% if not user.is_authenticated %}
-                    <div class="card bg-white text-dark shadow-lg">
-                        <div class="card-body p-4">
-                            <h3 class="mb-3">Join Our Community</h3>
-                            <p class="mb-4">Ready to connect with amazing people?</p>
-                            <a href="{% url 'accounts:signup' %}" class="btn btn-primary btn-lg mb-2 w-100">Sign Up Free</a>
-                            <a href="{% url 'accounts:login' %}" class="btn btn-outline-primary w-100">Already a member? Login</a>
-                        </div>
-                    </div>
-                {% else %}
-                    <div class="card bg-white text-dark shadow-lg">
-                        <div class="card-body p-4">
-                            <h3 class="mb-3">Welcome back, {{ user.display_name }}!</h3>
-                            <div class="d-grid">
-                                <a href="{% url 'accounts:dashboard' %}" class="btn btn-primary btn-lg mb-2">Go to Dashboard</a>
-                                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#quickPostModal">Quick Post</button>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
             </div>
         </div>
     </div>
 </section>
 
 <!-- Features Section -->
-<section class="py-5">
+<section class="py-5 bg-light">
     <div class="container">
-        <div class="row text-center mb-5">
-            <div class="col-lg-8 mx-auto">
-                <h2 class="display-5 fw-bold">Everything You Need in One Platform</h2>
-                <p class="lead">Discover powerful features designed to bring people together</p>
-            </div>
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold">Everything You Need in One Place</h2>
+            <p class="lead text-muted">Powerful features to connect, collaborate, and thrive</p>
         </div>
         
         <div class="row g-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="card feature-card text-center p-4">
-                    <div class="feature-icon mb-3">
-                        <i class="fas fa-comments fa-3x text-primary"></i>
-                    </div>
-                    <h4>Real-time Chat</h4>
-                    <p>Connect instantly with community members through our lightning-fast chat system.</p>
-                    <div class="mt-auto">
-                        <span class="badge bg-success" id="active-chats">0 active</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-6">
-                <div class="card feature-card text-center p-4">
-                    <div class="feature-icon mb-3">
-                        <i class="fas fa-calendar-alt fa-3x text-info"></i>
-                    </div>
-                    <h4>Events & Meetups</h4>
-                    <p>Discover and create events that bring the community together.</p>
-                    <div class="mt-auto">
-                        <span class="badge bg-info" id="upcoming-events">0 upcoming</span>
+            <div class="col-md-6 col-lg-3">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon bg-primary bg-opacity-10 text-primary">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <h5 class="card-title">Real-time Chat</h5>
+                        <p class="card-text text-muted">Instant messaging with typing indicators, reactions, and file sharing.</p>
                     </div>
                 </div>
             </div>
             
-            <div class="col-lg-3 col-md-6">
-                <div class="card feature-card text-center p-4">
-                    <div class="feature-icon mb-3">
-                        <i class="fas fa-users fa-3x text-warning"></i>
-                    </div>
-                    <h4>Discussion Forums</h4>
-                    <p>Engage in meaningful conversations on topics that matter to you.</p>
-                    <div class="mt-auto">
-                        <span class="badge bg-warning" id="active-discussions">0 active</span>
+            <div class="col-md-6 col-lg-3">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon bg-success bg-opacity-10 text-success">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <h5 class="card-title">Events & Meetups</h5>
+                        <p class="card-text text-muted">Discover and join community events, workshops, and gatherings.</p>
                     </div>
                 </div>
             </div>
             
-            <div class="col-lg-3 col-md-6">
-                <div class="card feature-card text-center p-4">
-                    <div class="feature-icon mb-3">
-                        <i class="fas fa-bell fa-3x text-danger"></i>
+            <div class="col-md-6 col-lg-3">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon bg-warning bg-opacity-10 text-warning">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <h5 class="card-title">Discussion Forums</h5>
+                        <p class="card-text text-muted">Engage in threaded discussions on topics that matter to you.</p>
                     </div>
-                    <h4>Smart Notifications</h4>
-                    <p>Stay updated with personalized notifications that matter to you.</p>
-                    <div class="mt-auto">
-                        <span class="badge bg-danger notification-badge" id="new-notifications">0 new</span>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon bg-danger bg-opacity-10 text-danger">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                        <h5 class="card-title">Smart Notifications</h5>
+                        <p class="card-text text-muted">Stay updated with personalized alerts and mentions.</p>
                     </div>
                 </div>
             </div>
@@ -276,230 +315,296 @@
     </div>
 </section>
 
-{% if user.is_authenticated %}
-<!-- Quick Actions Section -->
-<section class="py-5 bg-light">
-    <div class="container">
-        <h2 class="text-center mb-4">Quick Actions</h2>
-        <div class="quick-action-grid">
-            <a href="#" class="quick-action-card" data-action="start-chat">
-                <i class="fas fa-comment-dots fa-2x mb-3"></i>
-                <h5>Start a Chat</h5>
-                <p>Begin a conversation with community members</p>
-            </a>
-            
-            <a href="#" class="quick-action-card" data-action="create-event">
-                <i class="fas fa-plus-circle fa-2x mb-3"></i>
-                <h5>Create Event</h5>
-                <p>Organize a meetup or virtual event</p>
-            </a>
-            
-            <a href="#" class="quick-action-card" data-action="new-topic">
-                <i class="fas fa-edit fa-2x mb-3"></i>
-                <h5>Start Discussion</h5>
-                <p>Post a topic in the forums</p>
-            </a>
-            
-            <a href="{% url 'accounts:edit_profile' %}" class="quick-action-card">
-                <i class="fas fa-user-edit fa-2x mb-3"></i>
-                <h5>Update Profile</h5>
-                <p>Keep your profile fresh and engaging</p>
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- Live Activity Feed -->
+<!-- Live Feed & Activity -->
 <section class="py-5">
     <div class="container">
         <div class="row">
-            <div class="col-lg-8">
+            <!-- Live Feed -->
+            <div class="col-lg-8 mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2>Live Activity Feed</h2>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
-                        <label class="form-check-label" for="autoRefresh">Auto-refresh</label>
+                    <h3><span class="pulse-dot"></span>Live Activity Feed</h3>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary active" data-filter="all">All</button>
+                        <button class="btn btn-sm btn-outline-primary" data-filter="chat">Chat</button>
+                        <button class="btn btn-sm btn-outline-primary" data-filter="event">Events</button>
+                        <button class="btn btn-sm btn-outline-primary" data-filter="forum">Forums</button>
                     </div>
                 </div>
                 
-                <div id="activity-feed" class="mb-4">
-                    <!-- Dynamic content loaded here -->
-                </div>
-                
-                <div class="text-center">
-                    <button class="btn btn-outline-primary" id="load-more-activity">Load More</button>
+                <div class="live-feed" id="activity-feed">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Loading live activity...</p>
+                    </div>
                 </div>
             </div>
             
+            <!-- Sidebar -->
             <div class="col-lg-4">
-                <!-- Online Users -->
+                <!-- Trending Topics -->
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="fas fa-circle text-success me-2"></i>
-                            Online Users
-                        </h5>
-                        <span class="badge bg-success" id="online-users-count">0</span>
+                    <div class="card-header bg-gradient">
+                        <h5 class="mb-0"><i class="fas fa-fire text-danger me-2"></i>Trending Now</h5>
                     </div>
-                    <div class="card-body online-users-list" id="online-users-container">
-                        <!-- Dynamic online users list -->
+                    <div class="card-body" id="trending-topics">
+                        <a href="#" class="trending-tag">#WebDevelopment</a>
+                        <a href="#" class="trending-tag">#Django</a>
+                        <a href="#" class="trending-tag">#Python</a>
+                        <a href="#" class="trending-tag">#Community</a>
+                        <a href="#" class="trending-tag">#OpenSource</a>
                     </div>
                 </div>
                 
-                <!-- Trending Topics -->
-                <div class="trending-topics mb-4">
-                    <h5 class="mb-3">
-                        <i class="fas fa-fire me-2"></i>
-                        Trending Topics
-                    </h5>
-                    <div id="trending-topics-container">
-                        <!-- Dynamic trending topics -->
+                <!-- Online Users -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-circle text-success me-2"></i>
+                            Online Users
+                            <span class="badge bg-success float-end" id="online-count">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body" id="online-users" style="max-height: 300px; overflow-y: auto;">
+                        <div class="text-center text-muted py-3">
+                            <small>Loading...</small>
+                        </div>
                     </div>
                 </div>
                 
                 <!-- Quick Stats -->
+                {% if user.is_authenticated %}
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Community Stats</h5>
+                        <h5 class="mb-0">Your Stats</h5>
                     </div>
                     <div class="card-body">
                         <div class="row text-center">
                             <div class="col-6 border-end">
-                                <div class="h4 text-primary mb-0" id="your-posts">0</div>
-                                <small class="text-muted">Your Posts</small>
+                                <h4 class="text-primary mb-0">{{ user.total_posts }}</h4>
+                                <small class="text-muted">Posts</small>
                             </div>
                             <div class="col-6">
-                                <div class="h4 text-info mb-0" id="your-events">0</div>
-                                <small class="text-muted">Events Joined</small>
+                                <h4 class="text-success mb-0">{{ user.followers.count }}</h4>
+                                <small class="text-muted">Followers</small>
                             </div>
                         </div>
                         <hr>
                         <div class="row text-center">
                             <div class="col-6 border-end">
-                                <div class="h4 text-success mb-0" id="your-followers">{{ user.followers.count }}</div>
-                                <small class="text-muted">Followers</small>
+                                <h4 class="text-warning mb-0">{{ user.total_events_attended }}</h4>
+                                <small class="text-muted">Events</small>
                             </div>
                             <div class="col-6">
-                                <div class="h4 text-warning mb-0" id="your-following">{{ user.following.count }}</div>
-                                <small class="text-muted">Following</small>
+                                <h4 class="text-info mb-0">{{ user.reputation_score }}</h4>
+                                <small class="text-muted">Reputation</small>
                             </div>
                         </div>
                     </div>
                 </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Actions (For authenticated users) -->
+{% if user.is_authenticated %}
+<section class="py-5 bg-light">
+    <div class="container">
+        <h3 class="text-center mb-4">Quick Actions</h3>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <a href="{% url 'chat:home' %}" class="quick-action">
+                    <i class="fas fa-comment-dots"></i>
+                    <h5>Start Chat</h5>
+                    <p class="text-muted mb-0">Message someone</p>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <a href="#" class="quick-action">
+                    <i class="fas fa-calendar-plus"></i>
+                    <h5>Create Event</h5>
+                    <p class="text-muted mb-0">Host a meetup</p>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <a href="#" class="quick-action">
+                    <i class="fas fa-pen-square"></i>
+                    <h5>New Post</h5>
+                    <p class="text-muted mb-0">Start discussion</p>
+                </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <a href="{% url 'accounts:edit_profile' %}" class="quick-action">
+                    <i class="fas fa-user-edit"></i>
+                    <h5>Edit Profile</h5>
+                    <p class="text-muted mb-0">Update info</p>
+                </a>
             </div>
         </div>
     </div>
 </section>
 {% endif %}
 
-<!-- Quick Post Modal -->
-{% if user.is_authenticated %}
-<div class="modal fade" id="quickPostModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Quick Post</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="quick-post-form">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label">What's on your mind?</label>
-                        <textarea class="form-control" name="content" rows="4" placeholder="Share something with the community..."></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select class="form-select" name="category">
-                            <option value="general">General Discussion</option>
-                            <option value="announcement">Announcement</option>
-                            <option value="question">Question</option>
-                            <option value="event">Event</option>
-                        </select>
-                    </div>
-                    <div class="typing-indicator" id="post-typing">Someone is typing...</div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="submit-quick-post">Post</button>
-            </div>
-        </div>
+<!-- Call to Action -->
+{% if not user.is_authenticated %}
+<section class="py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="container text-center text-white">
+        <h2 class="display-5 fw-bold mb-3">Ready to Join Our Community?</h2>
+        <p class="lead mb-4">Connect with thousands of members worldwide</p>
+        <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-lg me-3">
+            <i class="fas fa-user-plus me-2"></i>Sign Up Free
+        </a>
+        <a href="{% url 'accounts:login' %}" class="btn btn-outline-light btn-lg">
+            <i class="fas fa-sign-in-alt me-2"></i>Login
+        </a>
     </div>
-</div>
-{% endif %}
-
-<!-- Welcome Tour for New Users -->
-{% if user.is_authenticated and not user.profile_completed %}
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
-    <div class="toast show" id="welcome-tour-toast" role="alert">
-        <div class="toast-header">
-            <i class="fas fa-star text-primary me-2"></i>
-            <strong class="me-auto">Welcome to the Community!</strong>
-            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-        </div>
-        <div class="toast-body">
-            <p class="mb-2">Complete your profile to get the most out of our platform!</p>
-            <div class="d-grid">
-                <a href="{% url 'accounts:edit_profile' %}" class="btn btn-primary btn-sm">Complete Profile</a>
-            </div>
-        </div>
-    </div>
-</div>
+</section>
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize home page functionality
-    const homePage = new HomePage();
-});
-
 class HomePage {
     constructor() {
         this.activityOffset = 0;
-        this.autoRefreshInterval = null;
+        this.currentFilter = 'all';
+        this.autoRefresh = true;
         this.init();
     }
-
+    
     init() {
-        this.loadInitialData();
-        this.setupEventListeners();
-        this.startRealTimeUpdates();
-        this.setupQuickActions();
-        
-        {% if user.is_authenticated %}
+        this.loadStats();
         this.loadActivityFeed();
         this.loadOnlineUsers();
-        this.setupAutoRefresh();
-        {% endif %}
+        this.setupEventListeners();
+        this.startAutoRefresh();
     }
-
-    async loadInitialData() {
+    
+    setupEventListeners() {
+        // Filter buttons
+        document.querySelectorAll('[data-filter]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.currentFilter = e.target.dataset.filter;
+                this.activityOffset = 0;
+                this.loadActivityFeed();
+            });
+        });
+    }
+    
+    async loadStats() {
         try {
             const response = await fetch('/api/home-stats/');
             const data = await response.json();
             
-            // Animate counters
-            this.animateCounter('online-count', data.online_users || 0);
+            this.animateCounter('live-users', data.online_users || 0);
             this.animateCounter('total-members', data.total_members || 0);
-            this.animateCounter('total-posts', data.total_posts || 0);
+            this.animateCounter('active-chats', data.active_chats || 0);
             this.animateCounter('total-events', data.total_events || 0);
-            
-            // Update feature badges
-            document.getElementById('active-chats').textContent = `${data.active_chats || 0} active`;
-            document.getElementById('upcoming-events').textContent = `${data.upcoming_events || 0} upcoming`;
-            document.getElementById('active-discussions').textContent = `${data.active_discussions || 0} active`;
-            document.getElementById('new-notifications').textContent = `${data.new_notifications || 0} new`;
-            
         } catch (error) {
-            console.error('Failed to load initial data:', error);
+            console.error('Failed to load stats:', error);
         }
     }
-
-    animateCounter(elementId, target) {
-        const element = document.getElementById(elementId);
+    
+    async loadActivityFeed() {
+        try {
+            const response = await fetch(`/api/activity-feed/?offset=${this.activityOffset}&filter=${this.currentFilter}`);
+            const data = await response.json();
+            
+            const container = document.getElementById('activity-feed');
+            
+            if (this.activityOffset === 0) {
+                container.innerHTML = '';
+            }
+            
+            if (data.activities.length === 0) {
+                container.innerHTML = '<div class="text-center py-5 text-muted">No activities yet</div>';
+                return;
+            }
+            
+            data.activities.forEach(activity => {
+                const item = this.createActivityItem(activity);
+                container.appendChild(item);
+            });
+            
+            this.activityOffset += data.activities.length;
+        } catch (error) {
+            console.error('Failed to load activity feed:', error);
+            document.getElementById('activity-feed').innerHTML = 
+                '<div class="text-center py-5 text-danger">Failed to load activities</div>';
+        }
+    }
+    
+    createActivityItem(activity) {
+        const div = document.createElement('div');
+        div.className = `feed-item ${activity.type || 'user'}`;
+        
+        const icon = {
+            'chat': 'fa-comments',
+            'event': 'fa-calendar-alt',
+            'forum': 'fa-comment-dots',
+            'user': 'fa-user'
+        }[activity.type] || 'fa-bell';
+        
+        div.innerHTML = `
+            <div class="d-flex">
+                <img src="${activity.user.avatar || '/static/img/default-avatar.png'}" 
+                     class="user-avatar-sm rounded-circle me-3" alt="${activity.user.name}">
+                <div class="flex-grow-1">
+                    <div class="d-flex justify-content-between">
+                        <strong>${activity.user.name}</strong>
+                        <small class="text-muted">${this.timeAgo(activity.timestamp)}</small>
+                    </div>
+                    <div class="text-muted">
+                        <i class="fas ${icon} me-2"></i>${activity.action}
+                    </div>
+                    ${activity.content ? `<p class="mb-0 mt-2">${activity.content}</p>` : ''}
+                </div>
+            </div>
+        `;
+        
+        return div;
+    }
+    
+    async loadOnlineUsers() {
+        try {
+            const response = await fetch('/api/online-users/');
+            const data = await response.json();
+            
+            const container = document.getElementById('online-users');
+            const countBadge = document.getElementById('online-count');
+            
+            countBadge.textContent = data.users.length;
+            
+            if (data.users.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted py-3"><small>No users online</small></div>';
+                return;
+            }
+            
+            container.innerHTML = data.users.map(user => `
+                <div class="user-card">
+                    <div class="d-flex align-items-center">
+                        <img src="${user.avatar || '/static/img/default-avatar.png'}" 
+                             class="user-avatar-sm rounded-circle me-2" alt="${user.name}">
+                        <div class="flex-grow-1">
+                            <strong class="d-block">${user.name}</strong>
+                            <small class="text-success">Online</small>
+                        </div>
+                        <i class="fas fa-circle text-success" style="font-size: 8px;"></i>
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to load online users:', error);
+        }
+    }
+    
+    animateCounter(id, target) {
+        const element = document.getElementById(id);
         if (!element) return;
         
         const duration = 2000;
@@ -517,338 +622,27 @@ class HomePage {
             }
         }, 16);
     }
-
-    setupEventListeners() {
-        // Load more activity button
-        const loadMoreBtn = document.getElementById('load-more-activity');
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', () => this.loadMoreActivity());
-        }
-
-        // Auto-refresh toggle
-        const autoRefreshToggle = document.getElementById('autoRefresh');
-        if (autoRefreshToggle) {
-            autoRefreshToggle.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    this.startAutoRefresh();
-                } else {
-                    this.stopAutoRefresh();
-                }
-            });
-        }
-
-        // Quick post form
-        const quickPostForm = document.getElementById('submit-quick-post');
-        if (quickPostForm) {
-            quickPostForm.addEventListener('click', () => this.submitQuickPost());
-        }
-
-        // Typing indicators for quick post
-        const quickPostTextarea = document.querySelector('#quickPostModal textarea[name="content"]');
-        if (quickPostTextarea) {
-            let typingTimer;
-            quickPostTextarea.addEventListener('input', () => {
-                this.showTypingIndicator();
-                clearTimeout(typingTimer);
-                typingTimer = setTimeout(() => this.hideTypingIndicator(), 2000);
-            });
-        }
-    }
-
-    setupQuickActions() {
-        const quickActionCards = document.querySelectorAll('.quick-action-card[data-action]');
-        quickActionCards.forEach(card => {
-            card.addEventListener('click', (e) => {
-                e.preventDefault();
-                const action = card.dataset.action;
-                this.handleQuickAction(action);
-            });
-        });
-    }
-
-    handleQuickAction(action) {
-        switch (action) {
-            case 'start-chat':
-                this.showChatModal();
-                break;
-            case 'create-event':
-                this.showEventModal();
-                break;
-            case 'new-topic':
-                this.showTopicModal();
-                break;
-            default:
-                console.log(`Quick action: ${action}`);
-        }
-    }
-
-    async loadActivityFeed() {
-        try {
-            const response = await fetch(`/api/activity-feed/?offset=${this.activityOffset}`);
-            const data = await response.json();
-            
-            const feedContainer = document.getElementById('activity-feed');
-            if (this.activityOffset === 0) {
-                feedContainer.innerHTML = '';
-            }
-            
-            data.activities.forEach(activity => {
-                const activityElement = this.createActivityElement(activity);
-                feedContainer.appendChild(activityElement);
-            });
-            
-            this.activityOffset += data.activities.length;
-            
-        } catch (error) {
-            console.error('Failed to load activity feed:', error);
-        }
-    }
-
-    createActivityElement(activity) {
-        const div = document.createElement('div');
-        div.className = 'activity-item p-3 mb-3 rounded';
-        div.innerHTML = `
-            <div class="d-flex align-items-start">
-                <img src="${activity.user.avatar || '/static/img/default-avatar.png'}" 
-                     class="user-avatar-small rounded-circle me-3" alt="${activity.user.name}">
-                <div class="flex-grow-1">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <strong>${activity.user.name}</strong>
-                            <span class="text-muted">${activity.action}</span>
-                        </div>
-                        <small class="text-muted">${this.timeAgo(activity.timestamp)}</small>
-                    </div>
-                    ${activity.content ? `<p class="mt-2 mb-0">${activity.content}</p>` : ''}
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-primary me-2" onclick="this.likeActivity('${activity.id}')">
-                            <i class="fas fa-heart"></i> ${activity.likes || 0}
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="this.commentActivity('${activity.id}')">
-                            <i class="fas fa-comment"></i> ${activity.comments || 0}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Add fade-in animation
-        div.style.opacity = '0';
-        div.style.transform = 'translateY(20px)';
-        setTimeout(() => {
-            div.style.transition = 'all 0.3s ease';
-            div.style.opacity = '1';
-            div.style.transform = 'translateY(0)';
-        }, 100);
-        
-        return div;
-    }
-
-    async loadOnlineUsers() {
-        try {
-            const response = await fetch('/api/online-users/');
-            const data = await response.json();
-            
-            const container = document.getElementById('online-users-container');
-            const countBadge = document.getElementById('online-users-count');
-            
-            if (container && countBadge) {
-                countBadge.textContent = data.users.length;
-                
-                container.innerHTML = data.users.map(user => `
-                    <div class="d-flex align-items-center p-2 border-bottom">
-                        <img src="${user.avatar || '/static/img/default-avatar.png'}" 
-                             class="user-avatar-small rounded-circle me-3" alt="${user.name}">
-                        <div class="flex-grow-1">
-                            <div class="fw-semibold">${user.name}</div>
-                            <small class="text-success">Online</small>
-                        </div>
-                        <div class="online-indicator"></div>
-                    </div>
-                `).join('');
-            }
-            
-        } catch (error) {
-            console.error('Failed to load online users:', error);
-        }
-    }
-
-    startRealTimeUpdates() {
-        // WebSocket integration for real-time updates
-        if (window.wsManager) {
-            document.addEventListener('userPresence', (e) => {
-                this.handleUserPresenceUpdate(e.detail);
-            });
-            
-            document.addEventListener('chatMessage', (e) => {
-                this.handleNewChatMessage(e.detail);
-            });
-            
-            document.addEventListener('notification', (e) => {
-                this.handleNewNotification(e.detail);
-            });
-        }
-    }
-
-    setupAutoRefresh() {
-        this.startAutoRefresh();
-    }
-
-    startAutoRefresh() {
-        this.autoRefreshInterval = setInterval(() => {
-            this.loadOnlineUsers();
-            this.refreshStats();
-        }, 30000); // Refresh every 30 seconds
-    }
-
-    stopAutoRefresh() {
-        if (this.autoRefreshInterval) {
-            clearInterval(this.autoRefreshInterval);
-            this.autoRefreshInterval = null;
-        }
-    }
-
-    async refreshStats() {
-        try {
-            const response = await fetch('/api/home-stats/');
-            const data = await response.json();
-            
-            document.getElementById('online-count').textContent = data.online_users || 0;
-            document.getElementById('new-notifications').textContent = data.new_notifications || 0;
-            
-        } catch (error) {
-            console.error('Failed to refresh stats:', error);
-        }
-    }
-
-    async submitQuickPost() {
-        const form = document.getElementById('quick-post-form');
-        const formData = new FormData(form);
-        
-        try {
-            const response = await fetch('/api/quick-post/', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            
-            if (response.ok) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('quickPostModal'));
-                modal.hide();
-                form.reset();
-                
-                // Refresh activity feed
-                this.activityOffset = 0;
-                this.loadActivityFeed();
-                
-                if (window.accountsManager) {
-                    window.accountsManager.showToast('Success', 'Post published successfully!', 'success');
-                }
-            } else {
-                throw new Error('Failed to publish post');
-            }
-            
-        } catch (error) {
-            console.error('Failed to submit post:', error);
-            if (window.accountsManager) {
-                window.accountsManager.showToast('Error', 'Failed to publish post', 'error');
-            }
-        }
-    }
-
-    showTypingIndicator() {
-        const indicator = document.getElementById('post-typing');
-        if (indicator) {
-            indicator.style.display = 'block';
-        }
-    }
-
-    hideTypingIndicator() {
-        const indicator = document.getElementById('post-typing');
-        if (indicator) {
-            indicator.style.display = 'none';
-        }
-    }
-
+    
     timeAgo(dateString) {
         if (window.Utils) {
             return window.Utils.timeAgo(dateString);
         }
         return new Date(dateString).toLocaleString();
     }
-
-    // Placeholder methods for modals
-    showChatModal() {
-        if (window.accountsManager) {
-            window.accountsManager.showToast('Info', 'Chat feature coming soon!', 'info');
-        }
-    }
-
-    showEventModal() {
-        if (window.accountsManager) {
-            window.accountsManager.showToast('Info', 'Event creation coming soon!', 'info');
-        }
-    }
-
-    showTopicModal() {
-        if (window.accountsManager) {
-            window.accountsManager.showToast('Info', 'Forum topics coming soon!', 'info');
-        }
-    }
-
-    async loadMoreActivity() {
-        await this.loadActivityFeed();
-    }
-
-    handleUserPresenceUpdate(data) {
-        this.loadOnlineUsers();
-    }
-
-    handleNewChatMessage(data) {
-        // Update chat activity indicators
-        const activeChats = document.getElementById('active-chats');
-        if (activeChats) {
-            const current = parseInt(activeChats.textContent) || 0;
-            activeChats.textContent = `${current + 1} active`;
-        }
-    }
-
-    handleNewNotification(data) {
-        // Update notification count
-        const notificationBadge = document.getElementById('new-notifications');
-        if (notificationBadge) {
-            const current = parseInt(notificationBadge.textContent) || 0;
-            notificationBadge.textContent = `${current + 1} new`;
-        }
-    }
-
-    likeActivity(activityId) {
-        // Handle activity like
-        if (window.accountsManager) {
-            window.accountsManager.showToast('Info', 'Like feature coming soon!', 'info');
-        }
-    }
-
-    commentActivity(activityId) {
-        // Handle activity comment
-        if (window.accountsManager) {
-            window.accountsManager.showToast('Info', 'Comment feature coming soon!', 'info');
+    
+    startAutoRefresh() {
+        if (this.autoRefresh) {
+            setInterval(() => {
+                this.loadStats();
+                this.loadOnlineUsers();
+            }, 30000); // Refresh every 30 seconds
         }
     }
 }
 
-// Add some helper functions for activity interactions
-window.likeActivity = function(activityId) {
-    // Global function for activity likes
-    console.log('Like activity:', activityId);
-};
-
-window.commentActivity = function(activityId) {
-    // Global function for activity comments
-    console.log('Comment activity:', activityId);
-};
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    window.homePage = new HomePage();
+});
 </script>
 {% endblock %}
