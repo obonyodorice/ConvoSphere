@@ -1,0 +1,271 @@
+{% extends '../base.html' %}
+{% load static %}
+
+{% block title %}Chat - Community Platform{% endblock %}
+
+{% block extra_css %}
+<style>
+.chat-sidebar {
+    height: calc(100vh - 100px);
+    overflow-y: auto;
+    border-right: 1px solid #dee2e6;
+}
+
+.chat-room-item {
+    padding: 15px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.chat-room-item:hover {
+    background: #f8f9fa;
+}
+
+.chat-room-item.active {
+    background: #e7f3ff;
+    border-left: 3px solid #0d6efd;
+}
+
+.unread-badge {
+    background: #dc3545;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.chat-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.online-dot {
+    width: 12px;
+    height: 12px;
+    background: #28a745;
+    border: 2px solid white;
+    border-radius: 50%;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+}
+
+.last-message {
+    color: #6c757d;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.room-type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="row g-0">
+        <!-- Sidebar -->
+        <div class="col-md-4 col-lg-3 chat-sidebar">
+            <div class="p-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0">Messages</h4>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newChatModal">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+                
+                <input type="text" class="form-control" id="search-rooms" placeholder="Search conversations...">
+            </div>
+            
+            <!-- Direct Messages -->
+            {% if direct_rooms %}
+            <div class="p-3">
+                <h6 class="text-muted mb-2">Direct Messages</h6>
+                {% for room in direct_rooms %}
+                <a href="{% url 'chat:room' room.id %}" class="text-decoration-none text-dark">
+                    <div class="chat-room-item">
+                        <div class="d-flex align-items-center">
+                            <div class="position-relative me-3">
+                                <img src="{{ room.avatar.url|default:'/static/img/default-avatar.png' }}" 
+                                     class="chat-avatar" alt="">
+                                <span class="online-dot"></span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between">
+                                    <strong>{{ room.display_name }}</strong>
+                                    {% if room.unread_count > 0 %}
+                                    <span class="unread-badge">{{ room.unread_count }}</span>
+                                    {% endif %}
+                                </div>
+                                {% with last_msg=room.get_last_message %}
+                                {% if last_msg %}
+                                <div class="last-message">{{ last_msg.content|truncatewords:8 }}</div>
+                                {% endif %}
+                                {% endwith %}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Group Chats -->
+            {% if group_rooms %}
+            <div class="p-3">
+                <h6 class="text-muted mb-2">Groups</h6>
+                {% for room in group_rooms %}
+                <a href="{% url 'chat:room' room.id %}" class="text-decoration-none text-dark">
+                    <div class="chat-room-item">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <img src="{{ room.avatar.url|default:'/static/img/default-group.png' }}" 
+                                     class="chat-avatar" alt="">
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong>{{ room.name }}</strong>
+                                        <span class="room-type-badge bg-info text-white ms-1">
+                                            {{ room.members.count }} members
+                                        </span>
+                                    </div>
+                                    {% if room.unread_count > 0 %}
+                                    <span class="unread-badge">{{ room.unread_count }}</span>
+                                    {% endif %}
+                                </div>
+                                {% with last_msg=room.get_last_message %}
+                                {% if last_msg %}
+                                <div class="last-message">{{ last_msg.content|truncatewords:8 }}</div>
+                                {% endif %}
+                                {% endwith %}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Event Chats -->
+            {% if event_rooms %}
+            <div class="p-3">
+                <h6 class="text-muted mb-2">Event Chats</h6>
+                {% for room in event_rooms %}
+                <a href="{% url 'chat:room' room.id %}" class="text-decoration-none text-dark">
+                    <div class="chat-room-item">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-calendar-alt fa-2x text-primary"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <strong>{{ room.name }}</strong>
+                                {% if room.unread_count > 0 %}
+                                <span class="unread-badge ms-2">{{ room.unread_count }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Main Chat Area -->
+        <div class="col-md-8 col-lg-9 d-flex align-items-center justify-content-center bg-light">
+            <div class="text-center">
+                <i class="fas fa-comments fa-5x text-muted mb-3"></i>
+                <h3>Select a conversation</h3>
+                <p class="text-muted">Choose a chat from the sidebar or start a new conversation</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newChatModal">
+                    <i class="fas fa-plus"></i> Start New Chat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Chat Modal -->
+<div class="modal fade" id="newChatModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">New Conversation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#direct-tab">
+                            Direct Message
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#group-tab">
+                            Group Chat
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <!-- Direct Message Tab -->
+                    <div class="tab-pane fade show active" id="direct-tab">
+                        <form id="create-dm-form">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label">Search users</label>
+                                <input type="text" class="form-control" id="user-search-dm" 
+                                       placeholder="Type username...">
+                                <div id="user-search-results-dm" class="mt-2"></div>
+                            </div>
+                            <input type="hidden" name="room_type" value="direct">
+                            <input type="hidden" name="selected_user" id="selected-user-dm">
+                        </form>
+                    </div>
+                    
+                    <!-- Group Chat Tab -->
+                    <div class="tab-pane fade" id="group-tab">
+                        <form id="create-group-form">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label">Group Name</label>
+                                <input type="text" class="form-control" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Description</label>
+                                <textarea class="form-control" name="description" rows="2"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Add Members</label>
+                                <input type="text" class="form-control" id="user-search-group" 
+                                       placeholder="Search users...">
+                                <div id="selected-members" class="mt-2"></div>
+                                <div id="user-search-results-group" class="mt-2"></div>
+                            </div>
+                            <input type="hidden" name="room_type" value="group">
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="create-chat-btn">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/chat.js' %}"></script>
+{% endblock %}
